@@ -37,6 +37,7 @@
   .crest{width:40px;height:40px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
   .app-header h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:.02em;line-height:1.2;}
   .app-header p{font-size:12px;opacity:.6;margin-top:1px;}
+  .nav-tabs-wrapper{position:sticky;top:0;z-index:99;box-shadow:0 2px 8px rgba(0,0,0,.25);}
   .nav-tabs{display:flex;background:var(--slate-mid);padding:0 .5rem;overflow-x:auto;}
   .nav-tab{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:rgba(255,255,255,.5);border:none;background:none;padding:12px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
   .nav-tab:hover{color:rgba(255,255,255,.8);}
@@ -271,6 +272,7 @@
     <button class="auth-signout" onclick="doSignOut()">Logg ut</button>
   </div>
 </div>
+<div class="nav-tabs-wrapper">
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="showPage('setup')">Last opp</button>
   <button class="nav-tab" onclick="showPage('players')">Spillere</button>
@@ -278,6 +280,7 @@
   <button class="nav-tab" onclick="showPage('result')">Resultat</button>
   <button class="nav-tab" onclick="showPage('history')">Historikk</button>
   <button class="nav-tab" id="tab-admin" style="display:none;color:var(--gold);border-bottom-color:transparent;" onclick="showPage('admin')">⚙️ Admin</button>
+</div>
 </div>
 <div class="main">
 
@@ -416,21 +419,21 @@
   <div class="card">
     <div class="form-row">
       <label>Økttype:</label>
-      <select id="session-type" class="flex-1">
+      <select id="session-type" class="flex-1" onchange="updateGroupLabels()">
         <option value="trening">🏃 Trening</option>
         <option value="seriekamp">⚽ Seriekamper</option>
         <option value="cupkamp">🏆 Cupkamper</option>
       </select>
     </div>
     <div class="form-row">
-      <label>Antall grupper:</label>
+      <label id="label-num-groups">Antall grupper:</label>
       <input type="number" id="num-groups" class="num-input" value="4" min="2" max="20" />
     </div>
     <div class="form-row">
       <label>Dato:</label>
       <input type="date" id="session-date" class="flex-1" />
     </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center;" onclick="generateGroups()">⚡ Generer grupper</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center;" id="btn-generate" onclick="generateGroups()">⚡ Generer grupper</button>
   </div>
   <div id="banner-generate" class="banner"></div>
 </div>
@@ -1369,6 +1372,24 @@ function approveGroups(){
   }
 }
 
+function updateGroupLabels(){
+  var type=document.getElementById('session-type').value;
+  var fl=gruppeLabelFlertall(type);
+  var cap=gruppeLabel(type,true);
+  document.getElementById('label-num-groups').textContent='Antall '+fl+':';
+  document.getElementById('btn-generate').textContent='\u26A1 Generer '+fl;
+  document.getElementById('result-empty').innerHTML='<div class="empty-icon">\uD83D\uDCCA</div>Generer '+fl+' f\u00f8rst';
+}
+function gruppeLabel(sessionType, cap){
+  var isKamp=sessionType==='seriekamp'||sessionType==='cupkamp';
+  var w=isKamp?'lag':'gruppe';
+  return cap?w.charAt(0).toUpperCase()+w.slice(1):w;
+}
+function gruppeLabelFlertall(sessionType){
+  var isKamp=sessionType==='seriekamp'||sessionType==='cupkamp';
+  return isKamp?'lag':'grupper';
+}
+
 function shuffle(arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
 function buildRecentPairs(sessionType){
   var pairs={};
@@ -1437,15 +1458,16 @@ function renderResult(session,pending){
   document.getElementById('result-title').textContent=session.name;
   var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
   var tl={trening:'🏃 Trening',seriekamp:'⚽ Seriekamper',cupkamp:'🏆 Cupkamper'};
-  document.getElementById('result-meta').textContent=(tl[session.sessionType]||'')+' · '+ml[session.mode]+' · '+session.groups.length+' grupper · '+session.groups.flat().length+' spillere';
+  document.getElementById('result-meta').textContent=(tl[session.sessionType]||'')+' · '+ml[session.mode]+' · '+session.groups.length+' '+gruppeLabelFlertall(session.sessionType)+' · '+session.groups.flat().length+' spillere';
   var n=session.groups.length,upperCount=session.mode==='adapted'?Math.floor(n/2):0,html='';
+  var gl=gruppeLabel(session.sessionType, true);
   session.groups.forEach(function(group,i){
     var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
     var sorted=group.slice().sort(function(a,b){return a.level-b.level;});
     if(session.mode==='adapted'&&i===0)html+=divider('Øvre nivå');
     if(session.mode==='adapted'&&i===upperCount&&upperCount>0)html+=divider('Nedre nivå');
-    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?'<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; Gruppe '+i+'</span>':'';
-    html+='<div class="group-card"><div class="group-header"><span class="group-name">Gruppe '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
+    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?'<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
+    html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
     sorted.forEach(function(p){html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span><span class="lvl-badge lvl-badge-'+p.level+'">Nivå '+p.level+'</span></div>';});
     html+='<div class="stats-bar" style="margin-top:10px;">';
     if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
@@ -1464,8 +1486,9 @@ function exportExcel(){
   var titleText=(tl[sessionGroups.sessionType]||'')+' · '+sessionGroups.name;
   var rows=[[titleText],[],['Navn','Nivå  \u2190 slett denne kolonnen f\u00f8r deling']];
   var playerRows=[],groupHeaderRows=[],rowIdx=3;
+  var gl=gruppeLabel(sessionGroups.sessionType,true);
   sessionGroups.groups.forEach(function(g,i){
-    rows.push(['Gruppe '+(i+1)]);groupHeaderRows.push(rowIdx);rowIdx++;
+    rows.push([gl+' '+(i+1)]);groupHeaderRows.push(rowIdx);rowIdx++;
     g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){rows.push([p.name,'Niv\u00e5 '+p.level]);playerRows.push({r:rowIdx});rowIdx++;});
     rows.push([]);rowIdx++;
   });
@@ -1489,8 +1512,9 @@ function copyToClipboard(){
   if(!sessionGroups)return;
   var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
   var text=sessionGroups.name+' \u00b7 '+(tl[sessionGroups.sessionType]||'')+'\n\n';
+  var gl=gruppeLabel(sessionGroups.sessionType,true);
   sessionGroups.groups.forEach(function(g,i){
-    text+='Gruppe '+(i+1)+':\n';
+    text+=gl+' '+(i+1)+':\n';
     g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){text+='  '+p.name+'\n';});
     text+='\n';
   });
@@ -1513,14 +1537,14 @@ function renderHistory(){
         '<div style="flex:1;">'+
           '<div><span class="type-pill type-pill-'+typeKey+'">'+(tl[typeKey]||typeKey)+'</span></div>'+
           '<div class="history-session-title">'+s.name+'</div>'+
-          '<div class="history-session-meta">'+date+' \u00b7 '+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>'+
+          '<div class="history-session-meta">'+date+' \u00b7 '+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' '+gruppeLabelFlertall(s.sessionType)+' \u00b7 '+s.groups.flat().length+' spillere</div>'+
         '</div>'+
         '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="openShareModal(event,'+i+')">\uD83D\uDCE4 Del</button>'+
         '<button class="btn btn-danger btn-sm" style="margin-right:8px;flex-shrink:0;" onclick="deleteSession(event,'+i+')">Slett</button>'+
         '<span style="font-size:12px;color:var(--slate-light);flex-shrink:0;" id="hist-chevron-'+i+'">\u25BC</span>'+
       '</div>'+
       '<div class="history-session-body" id="hist-body-'+i+'">'+
-        s.groups.map(function(g,gi){return'<div class="history-group"><div class="history-group-name">Gruppe '+(gi+1)+'</div><div style="font-size:13px;line-height:1.8;">'+g.slice().sort(function(a,b){return a.level-b.level;}).map(function(p){return p.name;}).join(', ')+'</div></div>';}).join('')+
+        s.groups.map(function(g,gi){return'<div class="history-group"><div class="history-group-name">'+gruppeLabel(s.sessionType,true)+' '+(gi+1)+'</div><div style="font-size:13px;line-height:1.8;">'+g.slice().sort(function(a,b){return a.level-b.level;}).map(function(p){return p.name;}).join(', ')+'</div></div>';}).join('')+
       '</div></div>';
   }).join('');
 }
@@ -1551,7 +1575,7 @@ function renderShareCard(s){
     '<div class="share-card-header-text">'+
       '<div class="share-card-club">Fjellhamar FK \u00b7 Gutter 2016</div>'+
       '<div class="share-card-title">'+s.name+'</div>'+
-      '<div class="share-card-meta">'+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>'+
+      '<div class="share-card-meta">'+s.groups.length+' '+gruppeLabelFlertall(s.sessionType)+' \u00b7 '+s.groups.flat().length+' spillere</div>'+
       '<div class="share-card-type share-card-type-'+typeKey+'">'+(tl[typeKey]||typeKey)+'</div>'+
     '</div>'+
   '</div>';
@@ -1560,21 +1584,21 @@ function renderShareCard(s){
     html+='<div class="share-groups-grid">';
     s.groups.forEach(function(g,i){
       if(i===upperCount&&upperCount>0)html+='</div><div class="share-groups-grid">';
-      html+=shareGroupBox(g,i);
+      html+=shareGroupBox(g,i,s.sessionType);
     });
     html+='</div>';
   }else{
     html+='<div class="share-groups-grid">';
-    s.groups.forEach(function(g,i){html+=shareGroupBox(g,i);});
+    s.groups.forEach(function(g,i){html+=shareGroupBox(g,i,s.sessionType);});
     html+='</div>';
   }
   html+='<div class="share-card-footer">Fjellhamar FK \u00b7 Lagdeling</div></div>';
   document.getElementById('share-card-content').innerHTML=html;
 }
 function shareTierLabel(label){return'<div class="share-tier-label"><div></div><span>'+label+'</span><div></div></div>';}
-function shareGroupBox(g,i){
+function shareGroupBox(g,i,sessionType){
   var sorted=g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
-  return'<div class="share-group-box"><div class="share-group-title">Gruppe '+(i+1)+'</div><div class="share-group-players">'+
+  return'<div class="share-group-box"><div class="share-group-title">'+gruppeLabel(sessionType,true)+' '+(i+1)+'</div><div class="share-group-players">'+
     sorted.map(function(p){return'<div class="share-player">'+p.name+'</div>';}).join('')+'</div></div>';
 }
 
@@ -1588,7 +1612,7 @@ function copyShareText(){
       if(i===0)text+='\u2014 \u00d8vre niv\u00e5 \u2014\n';
       if(i===upperCount&&upperCount>0)text+='\n\u2014 Nedre niv\u00e5 \u2014\n';
     }
-    text+='\nGruppe '+(i+1)+':\n';
+    text+='\n'+gruppeLabel(shareSession.sessionType,true)+' '+(i+1)+':\n';
     g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
   });
   navigator.clipboard.writeText(text).then(function(){
