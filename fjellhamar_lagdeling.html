@@ -606,7 +606,7 @@ var levelsRaw=[], levelsHeaders=[], attendRaw=[], attendHeaders=[];
 
 function savePlayers(){
   if(fbDb){
-    fbDb.collection('app_data').doc('players').set({list:allPlayers})
+    fbDb.collection('app_data').doc('players').set({data: JSON.stringify(allPlayers)})
       .catch(function(e){console.warn('Firestore savePlayers feil:',e);});
   }
   try{localStorage.setItem('fk_players',JSON.stringify(allPlayers));}catch(e){}
@@ -614,7 +614,7 @@ function savePlayers(){
 
 function saveHistory(){
   if(fbDb){
-    fbDb.collection('app_data').doc('history').set({list:appHistory})
+    fbDb.collection('app_data').doc('history').set({data: JSON.stringify(appHistory)})
       .catch(function(e){console.warn('Firestore saveHistory feil:',e);});
   }
   try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
@@ -624,10 +624,10 @@ function loadFromFirestore(callback){
   if(!fbDb){ callback(); return; }
   var playersReady=false, historyReady=false;
 
-  // Sanntidslytter for spillere — oppdaterer automatisk alle nettlesere
+  // Sanntidslytter for spillere
   fbDb.collection('app_data').doc('players').onSnapshot(function(doc){
-    if(doc.exists&&doc.data().list){
-      allPlayers=doc.data().list;
+    if(doc.exists&&doc.data().data){
+      try{allPlayers=JSON.parse(doc.data().data);}catch(e){allPlayers=[];}
     } else {
       try{allPlayers=JSON.parse(localStorage.getItem('fk_players')||'[]');}catch(e){allPlayers=[];}
     }
@@ -635,7 +635,6 @@ function loadFromFirestore(callback){
       playersReady=true;
       if(historyReady) callback();
     } else {
-      // Oppdater spillervisning hvis siden allerede er lastet
       updateSetupSummary();
       var done=document.getElementById('levels-done');
       if(allPlayers.length){
@@ -643,8 +642,8 @@ function loadFromFirestore(callback){
         done.style.display='block';
         document.getElementById('levels-saved-row').style.display='flex';
       }
-      var page=document.querySelector('.page.active');
-      if(page&&page.id==='page-players') renderPlayersList();
+      var activePage=document.querySelector('.page.active');
+      if(activePage&&activePage.id==='page-players') renderPlayersList();
     }
   }, function(e){
     console.warn('Firestore players lytter feil:',e);
@@ -653,10 +652,10 @@ function loadFromFirestore(callback){
     if(historyReady) callback();
   });
 
-  // Sanntidslytter for historikk — oppdaterer automatisk alle nettlesere
+  // Sanntidslytter for historikk
   fbDb.collection('app_data').doc('history').onSnapshot(function(doc){
-    if(doc.exists&&doc.data().list){
-      appHistory=doc.data().list;
+    if(doc.exists&&doc.data().data){
+      try{appHistory=JSON.parse(doc.data().data);}catch(e){appHistory=[];}
     } else {
       try{appHistory=JSON.parse(localStorage.getItem('fk_history')||'[]');}catch(e){appHistory=[];}
     }
@@ -664,7 +663,6 @@ function loadFromFirestore(callback){
       historyReady=true;
       if(playersReady) callback();
     } else {
-      // Alltid oppdater appHistory, og re-render hvis historikk-siden er aktiv
       var activePage=document.querySelector('.page.active');
       if(activePage&&activePage.id==='page-history') renderHistory();
     }
@@ -1014,7 +1012,7 @@ function approveGroups(){
 
   // Vent på Firestore-bekreftelse før vi viser "lagret"
   if(fbDb){
-    fbDb.collection('app_data').doc('history').set({list:appHistory})
+    fbDb.collection('app_data').doc('history').set({data: JSON.stringify(appHistory)})
       .then(function(){
         pendingSession=null;
         document.getElementById('result-pending').style.display='none';
