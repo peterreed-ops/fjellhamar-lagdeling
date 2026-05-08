@@ -664,9 +664,9 @@ function loadFromFirestore(callback){
       historyReady=true;
       if(playersReady) callback();
     } else {
-      // Oppdater historikkvisning hvis siden allerede er lastet
-      var page=document.querySelector('.page.active');
-      if(page&&page.id==='page-history') renderHistory();
+      // Alltid oppdater appHistory, og re-render hvis historikk-siden er aktiv
+      var activePage=document.querySelector('.page.active');
+      if(activePage&&activePage.id==='page-history') renderHistory();
     }
   }, function(e){
     console.warn('Firestore history lytter feil:',e);
@@ -1008,10 +1008,35 @@ function reGenerateGroups(){
 }
 function approveGroups(){
   if(!pendingSession)return;
-  appHistory.unshift(pendingSession);if(appHistory.length>30)appHistory.pop();saveHistory();
-  pendingSession=null;
-  document.getElementById('result-pending').style.display='none';
-  document.getElementById('result-approved').style.display='block';
+  var btn=document.querySelector('#result-pending .btn-primary');
+  btn.disabled=true;btn.textContent='Lagrer\u2026';
+  appHistory.unshift(pendingSession);if(appHistory.length>30)appHistory.pop();
+
+  // Vent på Firestore-bekreftelse før vi viser "lagret"
+  if(fbDb){
+    fbDb.collection('app_data').doc('history').set({list:appHistory})
+      .then(function(){
+        pendingSession=null;
+        document.getElementById('result-pending').style.display='none';
+        document.getElementById('result-approved').style.display='block';
+        btn.disabled=false;btn.textContent='\u2713 Godkjenn og lagre';
+        // Også lagre lokalt som backup
+        try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
+      })
+      .catch(function(e){
+        btn.disabled=false;btn.textContent='\u2713 Godkjenn og lagre';
+        console.error('Feil ved lagring av historikk:',e);
+        alert('Feil ved lagring: '+e.message+'\n\nSjekk Firestore-reglene.');
+        // Rull tilbake
+        appHistory.shift();
+      });
+  } else {
+    // Lokal testing — lagre i localStorage
+    try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
+    pendingSession=null;
+    document.getElementById('result-pending').style.display='none';
+    document.getElementById('result-approved').style.display='block';
+  }
 }
 
 function shuffle(arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
