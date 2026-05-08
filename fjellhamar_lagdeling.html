@@ -278,39 +278,16 @@
   <button class="nav-tab" onclick="showPage('result')">Resultat</button>
   <button class="nav-tab" onclick="showPage('history')">Historikk</button>
   <button class="nav-tab" id="tab-admin" style="display:none;color:var(--gold);border-bottom-color:transparent;" onclick="showPage('admin')">⚙️ Admin</button>
-  <button class="nav-tab" id="tab-log" style="display:none;" onclick="showPage('changelog')">📋 Logg</button>
 </div>
 <div class="main">
 
 <!-- LAST OPP -->
 <div id="page-setup" class="page active">
-  <div class="section-divider">Spilleroversikt med nivåer</div>
-  <div class="card">
-    <div class="upload-zone" id="zone-levels" onclick="document.getElementById('file-levels').click()" ondragover="dragOver(event,'zone-levels')" ondragleave="dragLeave('zone-levels')" ondrop="dropFile(event,'levels')">
-      <input type="file" id="file-levels" accept=".xlsx,.xls,.csv" onchange="handleLevelsFile(event)" />
-      <div class="upload-icon">📋</div><div class="upload-title">Nivåoversikt</div>
-      <div class="upload-sub">Excel-fil med navn og nivå (1=best, 3=lavest)</div>
-      <div class="upload-done" id="levels-done" style="display:none;"></div>
-    </div>
-    <div id="banner-levels" class="banner"></div>
-    <div id="levels-saved-row" style="display:none;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-light);">
-      <span style="font-size:13px;color:var(--green);font-weight:500;">☁️ Spilleroversikt er lagret og deles med alle brukere</span>
-      <button class="btn btn-sm btn-danger" onclick="clearPlayers()">Slett</button>
-    </div>
-    <div id="levels-mapper" style="display:none;margin-top:12px;">
-      <div class="col-map-grid">
-        <div><label>Navnekolonne</label><select id="col-name" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
-        <div><label>Nivåkolonne</label><select id="col-level" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
-      </div>
-      <div id="levels-preview"></div>
-      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmLevels()">✓ Bekreft import</button></div>
-    </div>
-  </div>
-  <div class="section-divider">Oppmøteliste</div>
+  <div class="section-divider">Hvem møter opp i dag?</div>
   <div class="card">
     <div class="upload-zone" id="zone-attend" onclick="document.getElementById('file-attend').click()" ondragover="dragOver(event,'zone-attend')" ondragleave="dragLeave('zone-attend')" ondrop="dropFile(event,'attend')">
       <input type="file" id="file-attend" accept=".xlsx,.xls,.csv" onchange="handleAttendFile(event)" />
-      <div class="upload-icon">📅</div><div class="upload-title">Oppmøteliste</div>
+      <div class="upload-icon">📅</div><div class="upload-title">Last opp oppmøteliste</div>
       <div class="upload-sub">Spond-eksport eller annen liste over hvem som deltar</div>
       <div class="upload-done" id="attend-done" style="display:none;"></div>
     </div>
@@ -341,6 +318,33 @@
     <div class="section-divider" style="margin:0;">Spilleroversikt</div>
     <button class="btn btn-sm" onclick="exportPlayersExcel()">📥 Last ned Excel</button>
   </div>
+
+  <!-- Import fra Excel -->
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-title">Importer fra Excel</div>
+    <div class="upload-zone" id="zone-levels" onclick="document.getElementById('file-levels').click()" ondragover="dragOver(event,'zone-levels')" ondragleave="dragLeave('zone-levels')" ondrop="dropFile(event,'levels')">
+      <input type="file" id="file-levels" accept=".xlsx,.xls,.csv" onchange="handleLevelsFile(event)" />
+      <div class="upload-icon">📋</div>
+      <div class="upload-title">Last opp nivåoversikt</div>
+      <div class="upload-sub">Excel-fil med navn og nivå (1=best, 3=lavest)</div>
+      <div class="upload-done" id="levels-done" style="display:none;"></div>
+    </div>
+    <div id="banner-levels" class="banner"></div>
+    <div id="levels-saved-row" style="display:none;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-light);">
+      <span style="font-size:13px;color:var(--green);font-weight:500;">☁️ Spilleroversikt er lagret og deles med alle brukere</span>
+      <button class="btn btn-sm btn-danger" onclick="clearPlayers()">Slett</button>
+    </div>
+    <div id="levels-mapper" style="display:none;margin-top:12px;">
+      <div class="col-map-grid">
+        <div><label>Navnekolonne</label><select id="col-name" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+        <div><label>Nivåkolonne</label><select id="col-level" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+      </div>
+      <div id="levels-preview"></div>
+      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmLevels()">✓ Bekreft import</button></div>
+    </div>
+  </div>
+
+  <!-- Legg til manuelt -->
   <div class="card" style="margin-bottom:12px;">
     <div class="card-title">Legg til spiller</div>
     <div class="form-row">
@@ -353,6 +357,7 @@
       <button class="btn btn-primary btn-sm" onclick="addPlayerManual()">+ Legg til</button>
     </div>
   </div>
+
   <div class="legend">
     <div class="legend-item"><span class="lvl-dot lvl-dot-1"></span> Nivå 1 — Mest øvede</div>
     <div class="legend-item"><span class="lvl-dot lvl-dot-2"></span> Nivå 2 — Middels</div>
@@ -425,35 +430,21 @@
 
 <!-- HISTORIKK -->
 <div id="page-history" class="page">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-    <div class="section-divider" style="margin:0;">Tidligere økter</div>
-    <button class="btn btn-danger btn-sm" onclick="clearHistory()">Slett alt</button>
-  </div>
+  <div class="section-divider" style="margin-bottom:8px;">Tidligere økter</div>
   <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
     Historikken brukes automatisk for variasjon per økttype. Sletting nullstiller dette.
   </div>
   <div id="history-content"><div class="empty"><div class="empty-icon">🕐</div>Ingen historikk ennå</div></div>
 </div>
 
-<!-- ENDRINGSLOGG -->
-<div id="page-changelog" class="page">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-    <div class="section-divider" style="margin:0;">Endringslogg — spilleroversikt</div>
-    <button class="btn btn-sm" onclick="loadChangeLog()">🔄 Oppdater</button>
-  </div>
-  <div style="font-size:12px;color:var(--slate-light);margin-bottom:14px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Viser alle endringer gjort i spilleroversikten — hvem som endret hva og når.
-  </div>
-  <div id="changelog-list">
-    <div class="empty"><div class="empty-icon">📋</div>Ingen endringer logget ennå</div>
-  </div>
-</div>
-
 <!-- ADMIN -->
 <div id="page-admin" class="page">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="section-divider" style="margin:0;">Tilgangsforespørsler</div>
-    <button class="btn btn-sm" onclick="loadAdminRequests()">🔄 Oppdater</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm" onclick="loadAdminRequests()">🔄 Oppdater</button>
+      <button class="btn btn-sm" id="btn-show-history-requests" onclick="loadRequestHistory()">🕐 Vis historikk</button>
+    </div>
   </div>
   <div style="font-size:12px;color:var(--slate-light);margin-bottom:14px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
     Her ser du alle som har bedt om tilgang. Godkjenn ved å klikke <strong>Godkjenn</strong> — brukeren opprettes da i Firebase og kan logge inn. Avvis sletter forespørselen.
@@ -464,10 +455,28 @@
 
   <div class="section-divider" style="margin-top:1.5rem;">Aktive brukere</div>
   <div style="font-size:12px;color:var(--slate-light);margin-bottom:14px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Alle som har tilgang til appen. Klikk <strong>Fjern tilgang</strong> for å sperre en bruker.
+    Alle som har tilgang til appen. Endre rolle eller fjern tilgang direkte her.
   </div>
   <div id="admin-users-list">
     <div class="empty"><div class="empty-icon">👥</div>Laster...</div>
+  </div>
+
+  <div class="section-divider" style="margin-top:1.5rem;">Grupperingshistorikk</div>
+  <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
+    Historikken brukes for å sikre variasjon i gruppesammensetningen over tid. Sletting nullstiller dette for alle økttyper.
+  </div>
+  <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑️ Slett all historikk</button>
+
+  <div class="section-divider" style="margin-top:1.5rem;">Endringslogg — spilleroversikt</div>
+  <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
+    Viser alle endringer i spilleroversikten — hvem som endret hva og når.
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="btn btn-sm" onclick="loadAdminLog()">🔄 Last logg</button>
+    <button class="btn btn-sm btn-danger" onclick="clearAllLog()">🗑️ Slett hele loggen</button>
+  </div>
+  <div id="admin-log-list">
+    <div class="empty"><div class="empty-icon">📋</div>Klikk "Last logg" for å se oppføringer</div>
   </div>
 </div>
 
@@ -539,7 +548,6 @@ function checkUserApproved(user){
       if(doc.data().role==='admin'||user.email===ADMIN_EMAIL){
         document.getElementById('tab-admin').style.display='block';
       }
-      document.getElementById('tab-log').style.display='block';
       showAuthOverlay(false);
       loadFromFirestore(function(){
         var today=new Date().toISOString().split('T')[0];
@@ -621,7 +629,6 @@ function doSignOut(){
   currentUserEmail='';
   document.getElementById('auth-user-bar').style.display='none';
   document.getElementById('tab-admin').style.display='none';
-  document.getElementById('tab-log').style.display='none';
   showAuthOverlay(true);switchAuthTab('login');
 }
 function showAuthMsg(msg,type){var el=document.getElementById('auth-msg');el.textContent=msg;el.className='auth-msg auth-msg-'+type;el.style.display='block';}
@@ -728,14 +735,13 @@ function showPage(p){
   document.querySelectorAll('.page').forEach(function(el){el.classList.remove('active');});
   document.querySelectorAll('.nav-tab').forEach(function(el){el.classList.remove('active');});
   document.getElementById('page-'+p).classList.add('active');
-  var pages=['setup','players','generate','result','history','admin','changelog'];
+  var pages=['setup','players','generate','result','history','admin'];
   var tabs=document.querySelectorAll('.nav-tab');
   var idx=pages.indexOf(p);
   if(idx>=0&&tabs[idx])tabs[idx].classList.add('active');
   if(p==='history')renderHistory();
   if(p==='players')renderPlayersList();
   if(p==='admin')loadAdminRequests();
-  if(p==='changelog')loadChangeLog();
 }
 
 // ── ENDRINGSLOGG ───────────────────────────────────────────────
@@ -781,40 +787,137 @@ function loadChangeLog(){
       container.innerHTML='<div class="empty">Feil ved lasting av logg: '+e.message+'</div>';
     });
 }
+function loadAdminLog(){
+  if(!fbDb)return;
+  var container=document.getElementById('admin-log-list');
+  container.innerHTML='<div class="empty"><div class="empty-icon">\u23F3</div>Laster...</div>';
+  fbDb.collection('change_log').orderBy('timestamp','desc').limit(200).get()
+    .then(function(snap){
+      if(snap.empty){container.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDCCB</div>Loggen er tom</div>';return;}
+      var html='';
+      snap.forEach(function(doc){
+        var d=doc.data();
+        var dato=new Date(d.timestamp).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        var icon=d.action==='Lagt til'?'\u2795':d.action==='Fjernet'?'\uD83D\uDDD1\uFE0F':d.action==='Niv\u00e5 endret'?'\u270F\uFE0F':'\uD83D\uDCE5';
+        html+='<div class="log-entry" style="justify-content:space-between;">'+
+          '<div style="display:flex;gap:10px;align-items:flex-start;flex:1;">'+
+            '<div class="log-icon">'+icon+'</div>'+
+            '<div class="log-body">'+
+              '<div class="log-action"><strong>'+d.action+'</strong> \u2014 '+d.details+'</div>'+
+              '<div class="log-meta">'+d.userName+' \u00b7 '+dato+'</div>'+
+            '</div>'+
+          '</div>'+
+          '<button class="btn btn-danger btn-sm" style="flex-shrink:0;margin-left:8px;" onclick="deleteLogEntry(\''+doc.id+'\')">Slett</button>'+
+        '</div>';
+      });
+      container.innerHTML=html;
+    })
+    .catch(function(e){container.innerHTML='<div class="empty">Feil: '+e.message+'</div>';});
+}
+
+function deleteLogEntry(docId){
+  if(!confirm('Slette denne loggoppf\u00f8ringen?'))return;
+  fbDb.collection('change_log').doc(docId).delete()
+    .then(function(){loadAdminLog();})
+    .catch(function(e){alert('Feil: '+e.message);});
+}
+
+function clearAllLog(){
+  if(!confirm('Slette HELE endringsloggen?\n\nDette kan ikke angres.'))return;
+  fbDb.collection('change_log').orderBy('timestamp').get()
+    .then(function(snap){
+      var batch=fbDb.batch();
+      snap.forEach(function(doc){batch.delete(doc.ref);});
+      return batch.commit();
+    })
+    .then(function(){
+      document.getElementById('admin-log-list').innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Loggen er slettet</div>';
+    })
+    .catch(function(e){alert('Feil ved sletting: '+e.message);});
+}
+
 var currentUserEmail='';
 
 function loadAdminRequests(){
   if(!fbDb)return;
-  // Last forespørsler
+  document.getElementById('btn-show-history-requests').textContent='\uD83D\uDD50 Vis historikk';
   fbDb.collection('access_requests').orderBy('requested','desc').get().then(function(snap){
     var list=document.getElementById('admin-requests-list');
-    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">📋</div>Ingen forespørsler ennå</div>';return;}
+    var pending=[];
+    snap.forEach(function(doc){ if(doc.data().status==='pending') pending.push(doc); });
+    if(pending.length===0){
+      list.innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Ingen ventende foresp\u00f8rsler</div>';
+      return;
+    }
     var html='';
-    snap.forEach(function(doc){
+    pending.forEach(function(doc){
       var d=doc.data();
       var dato=new Date(d.requested).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-      var isPending=d.status==='pending';
       html+='<div class="request-card">'+
         '<div class="request-info">'+
           '<div class="request-name">'+d.name+'</div>'+
           '<div class="request-email">'+d.email+'</div>'+
-          '<div class="request-date">'+dato+(d.status!=='pending'?' — <strong>'+d.status+'</strong>':'')+'</div>'+
+          '<div class="request-date">'+dato+'</div>'+
         '</div>'+
-        (isPending?
-          '<div class="request-actions">'+
-            '<button class="btn btn-approve" onclick="approveRequest(\''+doc.id+'\',\''+d.name+'\',\''+d.email+'\',\''+d.password_hint+'\')">✓ Godkjenn</button>'+
-            '<button class="btn btn-reject" onclick="rejectRequest(\''+doc.id+'\',\''+d.name+'\')">✕ Avvis</button>'+
-          '</div>':
-          '<span style="font-size:12px;color:var(--slate-light);">Behandlet</span>'
-        )+
+        '<div class="request-actions">'+
+          '<button class="btn btn-approve" onclick="approveRequest(\''+doc.id+'\',\''+d.name+'\',\''+d.email+'\',\''+d.password_hint+'\')">✓ Godkjenn</button>'+
+          '<button class="btn btn-reject" onclick="rejectRequest(\''+doc.id+'\',\''+d.name+'\')">✕ Avvis</button>'+
+        '</div>'+
       '</div>';
     });
     list.innerHTML=html;
   }).catch(function(e){
-    document.getElementById('admin-requests-list').innerHTML='<div class="empty">Kunne ikke laste forespørsler: '+e.message+'</div>';
+    document.getElementById('admin-requests-list').innerHTML='<div class="empty">Kunne ikke laste: '+e.message+'</div>';
   });
 
-  // Last aktive brukere
+  // Last aktive brukere samtidig
+  loadApprovedUsers();
+}
+
+function loadRequestHistory(){
+  if(!fbDb)return;
+  var btn=document.getElementById('btn-show-history-requests');
+  var list=document.getElementById('admin-requests-list');
+  list.innerHTML='<div class="empty"><div class="empty-icon">\u23F3</div>Laster historikk...</div>';
+  btn.textContent='\u2715 Skjul historikk';
+  btn.onclick=function(){ btn.textContent='\uD83D\uDD50 Vis historikk'; btn.onclick=loadRequestHistory; loadAdminRequests(); };
+
+  fbDb.collection('access_requests').orderBy('requested','desc').get().then(function(snap){
+    var processed=[];
+    snap.forEach(function(doc){ if(doc.data().status!=='pending') processed.push(doc); });
+    if(processed.length===0){
+      list.innerHTML='<div class="empty"><div class="empty-icon">📋</div>Ingen behandlede foresp\u00f8rsler</div>';
+      return;
+    }
+    var html='';
+    processed.forEach(function(doc){
+      var d=doc.data();
+      var dato=new Date(d.requested).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      var statusColor=d.status==='godkjent'?'var(--green)':'var(--danger)';
+      html+='<div class="request-card">'+
+        '<div class="request-info">'+
+          '<div class="request-name">'+d.name+'</div>'+
+          '<div class="request-email">'+d.email+'</div>'+
+          '<div class="request-date">'+dato+' \u2014 <strong style="color:'+statusColor+'">'+d.status+'</strong></div>'+
+        '</div>'+
+        '<button class="btn btn-danger btn-sm" onclick="deleteRequest(\''+doc.id+'\',\''+d.name+'\')">Slett</button>'+
+      '</div>';
+    });
+    list.innerHTML=html;
+  }).catch(function(e){
+    list.innerHTML='<div class="empty">Feil: '+e.message+'</div>';
+  });
+}
+
+function deleteRequest(docId, name){
+  if(!confirm('Slette foresp\u00f8rselen fra '+name+'?'))return;
+  fbDb.collection('access_requests').doc(docId).delete()
+    .then(function(){ loadRequestHistory(); })
+    .catch(function(e){ alert('Feil: '+e.message); });
+}
+
+function loadApprovedUsers(){
+  if(!fbDb)return;
   fbDb.collection('approved_users').get().then(function(snap){
     var list=document.getElementById('admin-users-list');
     if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">👥</div>Ingen aktive brukere</div>';return;}
@@ -822,19 +925,47 @@ function loadAdminRequests(){
     snap.forEach(function(doc){
       var d=doc.data();
       var isMe=doc.id===currentUserEmail;
+      var role=d.role||'trener';
+      var safeEmail=doc.id.replace(/'/g,"\\'");
+      var safeName=(d.name||'').replace(/'/g,"\\'");
       html+='<div class="user-card">'+
         '<div>'+
           '<div style="font-weight:600;font-size:14px;">'+d.name+'</div>'+
           '<div style="font-size:12px;color:var(--slate-light);">'+doc.id+'</div>'+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:10px;">'+
-          '<span class="user-role user-role-'+(d.role||'trener')+'">'+(d.role||'trener')+'</span>'+
-          (!isMe?'<button class="btn btn-reject btn-sm" onclick="revokeAccess(\''+doc.id+'\',\''+d.name+'\')">Fjern tilgang</button>':'<span style="font-size:11px;color:var(--slate-light);">deg selv</span>')+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          (!isMe
+            ? '<select onchange="changeUserRole(\''+safeEmail+'\',\''+safeName+'\',this.value)" '+
+              'style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;cursor:pointer;">'+
+              '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
+              '<option value="admin"'+(role==='admin'?' selected':'')+'>Admin</option>'+
+              '</select>'+
+              '<button class="btn btn-danger btn-sm" onclick="revokeAccess(\''+safeEmail+'\',\''+safeName+'\')">Fjern</button>'
+            : '<span class="user-role user-role-'+role+'">'+role+'</span>'+
+              '<span style="font-size:11px;color:var(--slate-light);">deg selv</span>'
+          )+
         '</div>'+
       '</div>';
     });
     list.innerHTML=html;
   });
+}
+
+function changeUserRole(email, name, newRole){
+  var oldRoleLabel = newRole==='admin' ? 'trener' : 'admin';
+  if(!confirm('Endre '+name+' fra '+oldRoleLabel+' til '+newRole+'?')){
+    // Rull tilbake select-visningen
+    loadAdminRequests(); return;
+  }
+  fbDb.collection('approved_users').doc(email).update({role: newRole})
+    .then(function(){
+      // Vis bekreftelse
+      showBanner('generate','success',name+' er nå '+newRole+'.');
+    })
+    .catch(function(e){
+      alert('Feil ved rolleendring: '+e.message);
+      loadAdminRequests();
+    });
 }
 
 function approveRequest(docId, name, email, passwordHint){
@@ -1310,7 +1441,7 @@ function renderShareCard(s){
     '<div class="share-card-header-text">'+
       '<div class="share-card-club">Fjellhamar FK \u00b7 Gutter 2016</div>'+
       '<div class="share-card-title">'+s.name+'</div>'+
-      '<div class="share-card-meta">'+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>'+
+      '<div class="share-card-meta">'+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>'+
       '<div class="share-card-type share-card-type-'+typeKey+'">'+(tl[typeKey]||typeKey)+'</div>'+
     '</div>'+
   '</div>';
