@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lagdeling — Fjellhamar FK G2016</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Fjellhamar FK farger — mørk marineblå, gull og hvit */
+    --green:#1A3A5C;         /* Mørk marineblå (primær) */
+    --green-light:#C8A84B;   /* Gull/Gylden (aksent) */
+    --green-pale:#F0EAD6;    /* Lys gullbeige (bakgrunn) */
+    --gold:#C8A84B;          /* Gull */
+    --gold-pale:#F5F0E0;     /* Lys gull */
+    --slate:#0D1F30;         /* Nesten sort — header/mørk bakgrunn */
+    --slate-mid:#162840;     /* Mørk marineblå — nav */
+    --slate-light:#4A6080;   /* Midtblå — sekundær tekst */
+    --fog:#F2F4F7;           /* Lys grå bakgrunn */
+    --white:#FFFFFF;
+    --border:#D0D8E4;
+    --danger:#C0392B;
+    --lvl1:#C8A84B;--lvl1-bg:#F5F0E0;   /* Gull = nivå 1 (best) */
+    --lvl2:#1A3A5C;--lvl2-bg:#E0EAF5;   /* Marineblå = nivå 2 */
+    --lvl3:#3A6BC4;--lvl3-bg:#DBEAFE;   /* Lysblå = nivå 3 */
+    --radius:12px;--radius-sm:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--fog);color:var(--slate);min-height:100vh;}
+  .app-header{background:var(--slate);color:white;padding:1.25rem 1.5rem;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;border-bottom:3px solid var(--gold);}
+  .app-header h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:.02em;line-height:1.2;color:var(--gold);}
+  .app-header p{font-size:12px;opacity:.6;margin-top:1px;}
+  .crest{width:40px;height:40px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+  .app-header h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:.02em;line-height:1.2;}
+  .app-header p{font-size:12px;opacity:.6;margin-top:1px;}
+  .nav-tabs{display:flex;background:var(--slate-mid);padding:0 .5rem;overflow-x:auto;}
+  .nav-tab{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:rgba(255,255,255,.5);border:none;background:none;padding:12px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
+  .nav-tab:hover{color:rgba(255,255,255,.8);}
+  .nav-tab.active{color:var(--green-light);border-bottom-color:var(--green-light);}
+  .main{padding:1.25rem;max-width:680px;margin:0 auto;}
+  .page{display:none;}.page.active{display:block;}
+  .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;}
+  .card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-light);margin-bottom:1rem;}
+  .section-divider{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-light);margin:1.5rem 0 .75rem;}
+  .upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:1.75rem 1.25rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--fog);}
+  .upload-zone:hover,.upload-zone.drag-over{border-color:var(--green-light);background:var(--green-pale);}
+  .upload-zone input{display:none;}
+  .upload-icon{font-size:32px;margin-bottom:8px;}
+  .upload-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--slate);}
+  .upload-sub{font-size:12px;color:var(--slate-light);margin-top:4px;}
+  .upload-done{font-size:13px;color:var(--green);font-weight:500;margin-top:8px;}
+  .btn{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;padding:9px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:white;color:var(--slate);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+  .btn:hover{background:var(--fog);}
+  .btn-primary{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
+  .btn-primary:hover{background:#245a42;border-color:#245a42;}
+  .btn-sm{padding:6px 12px;font-size:12px;}
+  .btn-danger{color:var(--danger);border-color:#f5c6c2;}
+  .btn-danger:hover{background:#fdf2f2;}
+  .btn-gold{background:var(--gold);color:var(--slate);border-color:var(--gold);font-weight:600;}
+  .btn-gold:hover{background:#e0941e;}
+  .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem;}
+  .mode-card{border:2px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:all .15s;background:white;}
+  .mode-card:hover{border-color:var(--green-light);}
+  .mode-card.selected{border-color:var(--green);background:var(--green-pale);}
+  .mode-icon{font-size:22px;margin-bottom:6px;}
+  .mode-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--slate);}
+  .mode-desc{font-size:11px;color:var(--slate-light);margin-top:3px;line-height:1.4;}
+  .mode-card.selected .mode-desc{color:var(--green);}
+  .form-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .form-row label{font-size:13px;color:var(--slate-light);white-space:nowrap;}
+  input[type="number"],input[type="text"],input[type="date"],select{font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;color:var(--slate);outline:none;}
+  input:focus,select:focus{border-color:var(--green-light);}
+  .num-input{width:70px;}.flex-1{flex:1;min-width:140px;}
+  .banner{padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px;display:none;}
+  .banner-success{background:var(--green-pale);border:1px solid var(--green-light);color:var(--green);}
+  .banner-error{background:#fdf2f2;border:1px solid #f5c6c2;color:var(--danger);}
+  .banner-warn{background:var(--gold-pale);border:1px solid var(--gold);color:#8a5a00;}
+  .tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;margin:2px;}
+  .tag-1{background:var(--lvl1-bg);color:#8a5a00;}.tag-2{background:var(--lvl2-bg);color:var(--green);}.tag-3{background:var(--lvl3-bg);color:var(--lvl3);}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem;padding:10px 14px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;}
+  .legend-item{display:flex;align-items:center;gap:6px;}
+  .lvl-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .lvl-dot-1{background:var(--lvl1);}.lvl-dot-2{background:var(--lvl2);}.lvl-dot-3{background:var(--lvl3);}
+  .lvl-badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:99px;}
+  .lvl-badge-1{background:var(--lvl1-bg);color:#8a5a00;}.lvl-badge-2{background:var(--lvl2-bg);color:var(--green);}.lvl-badge-3{background:var(--lvl3-bg);color:var(--lvl3);}
+  .results-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--slate);}
+  .group-card{background:white;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px;}
+  .group-header{background:var(--slate);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;}
+  .group-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+  .group-meta{font-size:11px;opacity:.7;display:flex;align-items:center;gap:6px;}
+  .group-body{padding:12px 16px;}
+  .player-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--fog);font-size:14px;}
+  .player-row:last-child{border-bottom:none;}
+  .stats-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .stat-chip{font-size:11px;padding:3px 10px;border-radius:99px;background:var(--fog);color:var(--slate-light);border:1px solid var(--border);}
+  .export-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .history-session{background:white;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+  .history-session-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .history-session-header.type-trening{background:#EAF3DE;border-left:4px solid var(--green-light);}
+  .history-session-header.type-seriekamp{background:#DBEAFE;border-left:4px solid #3A6BC4;}
+  .history-session-header.type-cupkamp{background:#FEF3DC;border-left:4px solid var(--gold);}
+  .history-session-header.type-unknown{background:var(--fog);border-left:4px solid var(--border);}
+  .type-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;margin-bottom:4px;}
+  .type-pill-trening{background:var(--green-pale);color:var(--green);border:1px solid var(--green-light);}
+  .type-pill-seriekamp{background:#DBEAFE;color:#1D4ED8;border:1px solid #93C5FD;}
+  .type-pill-cupkamp{background:var(--gold-pale);color:#8a5a00;border:1px solid var(--gold);}
+  .history-session-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;}
+  .history-session-meta{font-size:12px;color:var(--slate-light);margin-top:2px;}
+  .history-session-body{padding:12px 16px;display:none;}
+  .history-session-body.open{display:block;}
+  .history-group{margin-bottom:10px;}
+  .history-group-name{font-size:12px;font-weight:600;color:var(--slate-light);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+  .col-map-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0;}
+  .col-map-grid label{font-size:12px;color:var(--slate-light);display:block;margin-bottom:3px;}
+  .preview-table{width:100%;font-size:12px;border-collapse:collapse;margin-top:8px;}
+  .preview-table th{text-align:left;padding:5px 8px;background:var(--fog);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-light);}
+  .preview-table td{padding:5px 8px;border-bottom:1px solid var(--fog);}
+  .empty{text-align:center;padding:2.5rem 1rem;color:var(--slate-light);font-size:14px;}
+  .empty-icon{font-size:36px;margin-bottom:10px;}
+  /* MODAL */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:white;border-radius:var(--radius);width:100%;max-width:500px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+  .modal-topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);}
+  .modal-topbar-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;}
+  .modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--slate-light);line-height:1;padding:0;}
+  .modal-actions{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+  /* SHARE CARD */
+  .share-card{padding:20px;background:white;}
+  .share-card-header{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--slate);}
+  .share-card-club{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-light);margin-bottom:3px;}
+  .share-card-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--slate);line-height:1.1;}
+  .share-card-meta{font-size:12px;color:var(--slate-light);margin-top:4px;}
+  .share-card-type{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;margin-top:6px;}
+  .share-card-type-trening{background:var(--green-pale);color:var(--green);}
+  .share-card-type-seriekamp{background:#DBEAFE;color:#1D4ED8;}
+  .share-card-type-cupkamp{background:var(--gold-pale);color:#8a5a00;}
+  .share-tier-label{display:flex;align-items:center;gap:8px;margin:12px 0 8px;}
+  .share-tier-label span{font-size:10px;color:#888;white-space:nowrap;letter-spacing:.06em;text-transform:uppercase;}
+  .share-tier-label div{flex:1;height:1px;background:#ddd;}
+  .share-groups-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .share-group-box{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;}
+  .share-group-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;background:var(--slate);color:white;padding:6px 12px;letter-spacing:.04em;}
+  .share-group-players{padding:8px 12px;}
+  .share-player{font-size:13px;padding:4px 0;border-bottom:1px solid var(--fog);color:var(--slate);}
+  .share-player:last-child{border-bottom:none;}
+  .share-card-footer{margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--slate-light);text-align:center;letter-spacing:.04em;}
+  @media(max-width:480px){.mode-grid{grid-template-columns:1fr;}.col-map-grid{grid-template-columns:1fr;}.main{padding:1rem;}.app-header{padding:1rem;}.share-groups-grid{grid-template-columns:1fr;}}
+
+  /* AUTH */
+  .auth-overlay{display:flex;position:fixed;inset:0;background:var(--slate);z-index:999;align-items:center;justify-content:center;padding:1rem;}
+  .auth-box{background:white;border-radius:var(--radius);width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+  .auth-header{background:var(--slate);padding:1.5rem;text-align:center;border-bottom:3px solid var(--gold);}
+  .auth-crest{width:56px;height:56px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;}
+  .auth-header h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--gold);margin-bottom:4px;}
+  .auth-header p{font-size:12px;color:rgba(255,255,255,.6);}
+  .auth-body{padding:1.5rem;}
+  .auth-tabs{display:flex;gap:0;margin-bottom:1.25rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+  .auth-tab{flex:1;padding:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;border:none;background:white;color:var(--slate-light);cursor:pointer;transition:all .15s;}
+  .auth-tab.active{background:var(--green);color:white;font-weight:600;}
+  .auth-field{margin-bottom:12px;}
+  .auth-field label{display:block;font-size:12px;font-weight:500;color:var(--slate-light);margin-bottom:4px;}
+  .auth-field input{width:100%;font-family:'DM Sans',sans-serif;font-size:14px;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);outline:none;color:var(--slate);}
+  .auth-field input:focus{border-color:var(--green-light);}
+  .auth-btn{width:100%;padding:11px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;border:none;border-radius:var(--radius-sm);background:var(--green);color:white;cursor:pointer;transition:all .15s;margin-top:4px;}
+  .auth-btn:hover{background:#245a42;}
+  .auth-btn:disabled{background:#aaa;cursor:not-allowed;}
+  .auth-msg{font-size:13px;padding:10px 14px;border-radius:var(--radius-sm);margin-top:12px;display:none;}
+  .auth-msg-error{background:#fdf2f2;border:1px solid #f5c6c2;color:var(--danger);}
+  .auth-msg-success{background:var(--green-pale);border:1px solid var(--green-light);color:var(--green);}
+  .auth-msg-pending{background:var(--gold-pale);border:1px solid var(--gold);color:#8a5a00;}
+  .auth-user-bar{display:flex;align-items:center;gap:10px;margin-left:auto;}
+  .auth-user-name{font-size:12px;color:rgba(255,255,255,.7);}
+  .auth-signout{font-size:12px;padding:4px 10px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;}
+  .auth-signout:hover{background:rgba(255,255,255,.1);color:white;}
+</style>
+</head>
+<body>
+<!-- AUTH OVERLAY -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-header">
+      <img src="https://static.wixstatic.com/media/bf8bb4_292cbb9525b648f7b25d0ab5eca15059~mv2.png/v1/fill/w_95,h_87,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ffk_logo1_edited.png"
+           alt="Fjellhamar FK"
+           style="height:64px;width:auto;margin-bottom:12px;"
+           onerror="this.style.display='none';document.getElementById('auth-fallback-crest').style.display='flex';" />
+      <div class="auth-crest" id="auth-fallback-crest" style="display:none;">⚽</div>
+      <h2>Lagdeling</h2>
+      <p>Fjellhamar FK · Gutter 2016</p>
+    </div>
+    <div class="auth-body">
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">Logg inn</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">Be om tilgang</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="auth-login">
+        <div class="auth-field"><label>E-post</label><input type="email" id="login-email" placeholder="din@epost.no" /></div>
+        <div class="auth-field"><label>Passord</label><input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+        <button class="auth-btn" onclick="doLogin()">Logg inn</button>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="auth-register" style="display:none;">
+        <div class="auth-field"><label>Navn</label><input type="text" id="reg-name" placeholder="Fullt navn" /></div>
+        <div class="auth-field"><label>E-post</label><input type="email" id="reg-email" placeholder="din@epost.no" /></div>
+        <div class="auth-field"><label>Ønsket passord</label><input type="password" id="reg-password" placeholder="Minst 6 tegn" /></div>
+        <button class="auth-btn" onclick="doRegister()">Send forespørsel</button>
+      </div>
+
+      <div class="auth-msg" id="auth-msg"></div>
+
+      <!-- LOKAL TESTING — vises kun når filen åpnes direkte fra disk -->
+      <div id="local-test-bar" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); text-align:center;">
+        <p style="font-size:11px; color:var(--slate-light); margin-bottom:8px;">🖥 Lokal testmodus oppdaget</p>
+        <button class="auth-btn" style="background:var(--slate); font-size:13px;" onclick="skipAuthForTesting()">Fortsett uten innlogging (kun lokalt)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-header">
+  <img src="https://static.wixstatic.com/media/bf8bb4_292cbb9525b648f7b25d0ab5eca15059~mv2.png/v1/fill/w_95,h_87,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ffk_logo1_edited.png"
+       alt="Fjellhamar FK"
+       style="height:44px;width:auto;flex-shrink:0;"
+       onerror="this.style.display='none';document.getElementById('fallback-crest').style.display='flex';" />
+  <div class="crest" id="fallback-crest" style="display:none;">⚽</div>
+  <div>
+    <h1>Lagdeling</h1>
+    <p>Fjellhamar FK · Gutter 2016</p>
+  </div>
+  <div class="auth-user-bar" id="auth-user-bar" style="display:none;">
+    <span class="auth-user-name" id="auth-user-name"></span>
+    <button class="auth-signout" onclick="doSignOut()">Logg ut</button>
+  </div>
+</div>
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="showPage('setup')">Last opp</button>
+  <button class="nav-tab" onclick="showPage('players')">Spillere</button>
+  <button class="nav-tab" onclick="showPage('generate')">Generer</button>
+  <button class="nav-tab" onclick="showPage('result')">Resultat</button>
+  <button class="nav-tab" onclick="showPage('history')">Historikk</button>
+</div>
+<div class="main">
+
+<!-- LAST OPP -->
+<div id="page-setup" class="page active">
+  <div class="section-divider">Spilleroversikt med nivåer</div>
+  <div class="card">
+    <div class="upload-zone" id="zone-levels" onclick="document.getElementById('file-levels').click()" ondragover="dragOver(event,'zone-levels')" ondragleave="dragLeave('zone-levels')" ondrop="dropFile(event,'levels')">
+      <input type="file" id="file-levels" accept=".xlsx,.xls,.csv" onchange="handleLevelsFile(event)" />
+      <div class="upload-icon">📋</div><div class="upload-title">Nivåoversikt</div>
+      <div class="upload-sub">Excel-fil med navn og nivå (1=best, 3=lavest)</div>
+      <div class="upload-done" id="levels-done" style="display:none;"></div>
+    </div>
+    <div id="banner-levels" class="banner"></div>
+    <div id="levels-saved-row" style="display:none;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-light);">
+      <span style="font-size:13px;color:var(--green);font-weight:500;">💾 Nivåoversikt er lagret i nettleseren</span>
+      <button class="btn btn-sm btn-danger" onclick="clearPlayers()">Slett</button>
+    </div>
+    <div id="levels-mapper" style="display:none;margin-top:12px;">
+      <div class="col-map-grid">
+        <div><label>Navnekolonne</label><select id="col-name" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+        <div><label>Nivåkolonne</label><select id="col-level" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+      </div>
+      <div id="levels-preview"></div>
+      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmLevels()">✓ Bekreft import</button></div>
+    </div>
+  </div>
+  <div class="section-divider">Oppmøteliste</div>
+  <div class="card">
+    <div class="upload-zone" id="zone-attend" onclick="document.getElementById('file-attend').click()" ondragover="dragOver(event,'zone-attend')" ondragleave="dragLeave('zone-attend')" ondrop="dropFile(event,'attend')">
+      <input type="file" id="file-attend" accept=".xlsx,.xls,.csv" onchange="handleAttendFile(event)" />
+      <div class="upload-icon">📅</div><div class="upload-title">Oppmøteliste</div>
+      <div class="upload-sub">Spond-eksport eller annen liste over hvem som deltar</div>
+      <div class="upload-done" id="attend-done" style="display:none;"></div>
+    </div>
+    <div id="banner-attend" class="banner"></div>
+    <div id="attend-mapper" style="display:none;margin-top:12px;">
+      <div class="col-map-grid">
+        <div><label>Navnekolonne</label><select id="col-attend-name" onchange="updateAttendPreview()" style="width:100%;"></select></div>
+        <div><label>Statuskolonne (valgfri)</label><select id="col-attend-status" onchange="updateAttendPreview()" style="width:100%;"></select></div>
+      </div>
+      <div id="attend-preview"></div>
+      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmAttend()">✓ Bekreft import</button></div>
+    </div>
+  </div>
+  <div id="setup-summary" style="display:none;">
+    <div class="legend">
+      <div class="legend-item"><span class="lvl-dot lvl-dot-1"></span> Nivå 1 — Mest øvede</div>
+      <div class="legend-item"><span class="lvl-dot lvl-dot-2"></span> Nivå 2 — Middels</div>
+      <div class="legend-item"><span class="lvl-dot lvl-dot-3"></span> Nivå 3 — Minst øvede</div>
+    </div>
+    <div id="setup-summary-text"></div>
+    <button class="btn btn-primary" style="margin-top:12px;width:100%;" onclick="showPage('generate')">Gå til gruppering →</button>
+  </div>
+</div>
+
+<!-- SPILLERE -->
+<div id="page-players" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="section-divider" style="margin:0;">Spilleroversikt</div>
+    <button class="btn btn-sm" onclick="exportPlayersExcel()">📥 Last ned Excel</button>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-title">Legg til spiller</div>
+    <div class="form-row">
+      <input type="text" id="new-player-name" class="flex-1" placeholder="Navn" onkeydown="if(event.key==='Enter')addPlayerManual()" />
+      <select id="new-player-level">
+        <option value="1">Nivå 1 — Best</option>
+        <option value="2" selected>Nivå 2 — Middels</option>
+        <option value="3">Nivå 3 — Lavest</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="addPlayerManual()">+ Legg til</button>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><span class="lvl-dot lvl-dot-1"></span> Nivå 1 — Mest øvede</div>
+    <div class="legend-item"><span class="lvl-dot lvl-dot-2"></span> Nivå 2 — Middels</div>
+    <div class="legend-item"><span class="lvl-dot lvl-dot-3"></span> Nivå 3 — Minst øvede</div>
+  </div>
+  <div id="players-list-container"></div>
+</div>
+
+<!-- GENERER -->
+<div id="page-generate" class="page">
+  <div class="section-divider">Grupperingsmodus</div>
+  <div class="mode-grid">
+    <div class="mode-card selected" id="mode-adapted" onclick="setMode('adapted')">
+      <div class="mode-icon">🎯</div><div class="mode-label">Tilpasset</div>
+      <div class="mode-desc">Nivå 1+2 i øvre grupper, Nivå 2+3 i nedre grupper</div>
+    </div>
+    <div class="mode-card" id="mode-balanced" onclick="setMode('balanced')">
+      <div class="mode-icon">⚖️</div><div class="mode-label">Jevne lag</div>
+      <div class="mode-desc">Like mange fra hvert nivå på alle grupper</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="form-row">
+      <label>Økttype:</label>
+      <select id="session-type" class="flex-1">
+        <option value="trening">🏃 Trening</option>
+        <option value="seriekamp">⚽ Seriekamper</option>
+        <option value="cupkamp">🏆 Cupkamper</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Antall grupper:</label>
+      <input type="number" id="num-groups" class="num-input" value="4" min="2" max="20" />
+    </div>
+    <div class="form-row">
+      <label>Dato:</label>
+      <input type="date" id="session-date" class="flex-1" />
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center;" onclick="generateGroups()">⚡ Generer grupper</button>
+  </div>
+  <div id="banner-generate" class="banner"></div>
+</div>
+
+<!-- RESULTAT -->
+<div id="page-result" class="page">
+  <div id="result-empty" class="empty"><div class="empty-icon">📊</div>Generer grupper først</div>
+  <div id="result-content" style="display:none;">
+    <div style="margin-bottom:12px;">
+      <div class="results-title" id="result-title">Grupper</div>
+      <div style="font-size:12px;color:var(--slate-light);margin-top:2px;" id="result-meta"></div>
+    </div>
+    <div id="result-pending" style="display:none;background:var(--gold-pale);border:1px solid var(--gold);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:600;color:#8a5a00;margin-bottom:8px;">⏳ Forslag — ikke lagret i historikken ennå</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="approveGroups()">✓ Godkjenn og lagre</button>
+        <button class="btn" onclick="reGenerateGroups()">🔀 Generer nytt forslag</button>
+        <button class="btn btn-danger" onclick="showPage('generate')">✕ Avbryt</button>
+      </div>
+    </div>
+    <div id="result-approved" style="display:none;background:var(--green-pale);border:1px solid var(--green-light);border-radius:var(--radius-sm);padding:10px 16px;margin-bottom:12px;">
+      <span style="font-size:13px;font-weight:600;color:var(--green);">✓ Godkjent og lagret i historikken</span>
+    </div>
+    <div id="groups-output"></div>
+    <div class="export-row">
+      <button class="btn btn-primary" onclick="exportExcel()">📥 Last ned som Excel</button>
+      <button class="btn btn-gold" onclick="copyToClipboard()">📋 Kopier tekst</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORIKK -->
+<div id="page-history" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <div class="section-divider" style="margin:0;">Tidligere økter</div>
+    <button class="btn btn-danger btn-sm" onclick="clearHistory()">Slett alt</button>
+  </div>
+  <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
+    Historikken brukes automatisk for variasjon per økttype. Sletting nullstiller dette.
+  </div>
+  <div id="history-content"><div class="empty"><div class="empty-icon">🕐</div>Ingen historikk ennå</div></div>
+</div>
+
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal-overlay" id="share-modal" onclick="closeShareModalOutside(event)">
+  <div class="modal-box">
+    <div class="modal-topbar">
+      <span class="modal-topbar-title">Del gruppeoversikt</span>
+      <button class="modal-close" onclick="closeShareModal()">&#x2715;</button>
+    </div>
+    <div id="share-card-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="copyShareText()">📋 Kopier tekst</button>
+      <button class="btn btn-gold" onclick="openPrintWindow()">🖼 Skriv ut / Bilde</button>
+      <button class="btn" onclick="closeShareModal()">Lukk</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── FIREBASE CONFIG — lim inn din konfigurasjon her ──────────────
+var firebaseConfig = {
+  apiKey:            "AIzaSyDrJHgcBxYyUJO4kqj7wRMCZZ2bcj7OuFg",
+  authDomain:        "fjellhamar-laginndeling.firebaseapp.com",
+  projectId:         "fjellhamar-laginndeling",
+  storageBucket:     "fjellhamar-laginndeling.firebasestorage.app",
+  messagingSenderId: "471205098772",
+  appId:             "1:471205098772:web:888b24cc1eb308bcc9fe01"
+};
+// ─────────────────────────────────────────────────────────────────
+var ADMIN_EMAIL='peter.reed@online.no';
+var fbAuth,fbDb;
+
+function initFirebase(){
+  // Vis "lokal test"-knapp automatisk hvis filen åpnes direkte fra disk
+  if(window.location.protocol === 'file:') {
+    document.getElementById('local-test-bar').style.display = 'block';
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbAuth=firebase.auth();fbDb=firebase.firestore();
+    fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
+  }catch(e){console.warn('Firebase ikke konfigurert:',e.message);showAuthOverlay(false);}
+}
+
+function skipAuthForTesting(){
+  showAuthOverlay(false);
+  document.getElementById('auth-user-name').textContent='Lokal test';
+  document.getElementById('auth-user-bar').style.display='flex';
+}
+function checkUserApproved(user){
+  fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
+    if(doc.exists){
+      showAuthOverlay(false);
+      document.getElementById('auth-user-name').textContent=doc.data().name||user.email;
+      document.getElementById('auth-user-bar').style.display='flex';
+    }else{showAuthMsg('Din konto venter p\u00e5 godkjenning. Du f\u00e5r tilgang n\u00e5r admin godkjenner deg.','pending');fbAuth.signOut();}
+  }).catch(function(){showAuthOverlay(false);});
+}
+function showAuthOverlay(show){document.getElementById('auth-overlay').style.display=show?'flex':'none';}
+function switchAuthTab(tab){
+  document.querySelectorAll('.auth-tab').forEach(function(el,i){el.classList.toggle('active',(tab==='login'&&i===0)||(tab==='register'&&i===1));});
+  document.getElementById('auth-login').style.display=tab==='login'?'block':'none';
+  document.getElementById('auth-register').style.display=tab==='register'?'block':'none';
+  hideAuthMsg();
+}
+function doLogin(){
+  var email=document.getElementById('login-email').value.trim();
+  var password=document.getElementById('login-password').value;
+  if(!email||!password){showAuthMsg('Fyll inn e-post og passord.','error');return;}
+  var btn=document.querySelector('#auth-login .auth-btn');btn.disabled=true;btn.textContent='Logger inn\u2026';
+  fbAuth.signInWithEmailAndPassword(email,password).catch(function(err){
+    btn.disabled=false;btn.textContent='Logg inn';
+    var msg='Feil e-post eller passord.';
+    if(err.code==='auth/too-many-requests')msg='For mange fors\u00f8k. Pr\u00f8v igjen om litt.';
+    showAuthMsg(msg,'error');
+  });
+}
+function doRegister(){
+  var name=document.getElementById('reg-name').value.trim();
+  var email=document.getElementById('reg-email').value.trim();
+  var password=document.getElementById('reg-password').value;
+  if(!name||!email||!password){showAuthMsg('Fyll inn alle feltene.','error');return;}
+  if(password.length<6){showAuthMsg('Passordet m\u00e5 v\u00e6re minst 6 tegn.','error');return;}
+  var btn=document.querySelector('#auth-register .auth-btn');btn.disabled=true;btn.textContent='Sender\u2026';
+  fbDb.collection('access_requests').add({name:name,email:email,requested:new Date().toISOString(),status:'pending'})
+    .then(function(){return fbAuth.createUserWithEmailAndPassword(email,password);})
+    .then(function(){return fbAuth.signOut();})
+    .then(function(){
+      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+      showAuthMsg('Foresp\u00f8rselen er sendt! '+ADMIN_EMAIL+' vil godkjenne deg, s\u00e5 kan du logge inn.','success');
+      document.getElementById('reg-name').value='';
+      document.getElementById('reg-email').value='';
+      document.getElementById('reg-password').value='';
+    }).catch(function(err){
+      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+      var msg='Noe gikk galt. Pr\u00f8v igjen.';
+      if(err.code==='auth/email-already-in-use')msg='Denne e-posten er allerede registrert. Pr\u00f8v \u00e5 logge inn.';
+      if(err.code==='auth/invalid-email')msg='Ugyldig e-postadresse.';
+      showAuthMsg(msg,'error');
+    });
+}
+function doSignOut(){
+  if(fbAuth)fbAuth.signOut();
+  document.getElementById('auth-user-bar').style.display='none';
+  showAuthOverlay(true);switchAuthTab('login');
+}
+function showAuthMsg(msg,type){var el=document.getElementById('auth-msg');el.textContent=msg;el.className='auth-msg auth-msg-'+type;el.style.display='block';}
+function hideAuthMsg(){document.getElementById('auth-msg').style.display='none';}
+
+// ── STATE ──────────────────────────────────────────────────────
+var allPlayers=[], attendingNames=[], attendingPlayers=[];
+var sessionGroups=null, pendingSession=null, currentMode='adapted';
+var appHistory=[], shareSession=null;
+var levelsRaw=[], levelsHeaders=[], attendRaw=[], attendHeaders=[];
+
+function saveHistory(){try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}}
+function savePlayers(){try{localStorage.setItem('fk_players',JSON.stringify(allPlayers));}catch(e){}}
+function loadHistory(){try{return JSON.parse(localStorage.getItem('fk_history')||'[]');}catch(e){return[];}}
+function loadPlayers(){try{return JSON.parse(localStorage.getItem('fk_players')||'[]');}catch(e){return[];}}
+
+function init(){
+  allPlayers=loadPlayers(); appHistory=loadHistory();
+  var today=new Date().toISOString().split('T')[0];
+  document.getElementById('session-date').value=today;
+  if(allPlayers.length){
+    document.getElementById('levels-done').textContent='✓ '+allPlayers.length+' spillere lastet (lagret)';
+    document.getElementById('levels-done').style.display='block';
+    document.getElementById('levels-saved-row').style.display='flex';
+    updateSetupSummary();
+  }
+}
+
+function showPage(p){
+  document.querySelectorAll('.page').forEach(function(el){el.classList.remove('active');});
+  document.querySelectorAll('.nav-tab').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('page-'+p).classList.add('active');
+  var pages=['setup','players','generate','result','history'];
+  var tabs=document.querySelectorAll('.nav-tab');
+  var idx=pages.indexOf(p);
+  if(idx>=0&&tabs[idx])tabs[idx].classList.add('active');
+  if(p==='history')renderHistory();
+  if(p==='players')renderPlayersList();
+}
+
+function dragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
+function dragLeave(id){document.getElementById(id).classList.remove('drag-over');}
+function dropFile(e,type){
+  e.preventDefault();dragLeave(type==='levels'?'zone-levels':'zone-attend');
+  var file=e.dataTransfer.files[0];if(!file)return;
+  if(type==='levels')processLevelsFile(file);else processAttendFile(file);
+}
+
+function handleLevelsFile(e){processLevelsFile(e.target.files[0]);}
+function processLevelsFile(file){
+  if(!file)return;
+  readXLSX(file,function(headers,rows){
+    levelsHeaders=headers;levelsRaw=rows;
+    var ni=headers.findIndex(function(h){return/navn|name|spiller/i.test(h);});
+    var li=headers.findIndex(function(h){return/niv|level|gruppe|group/i.test(h);});
+    var cn=document.getElementById('col-name');var cl=document.getElementById('col-level');
+    var opts=headers.map(function(h,i){return'<option value="'+i+'">'+(h||'Kolonne '+(i+1))+'</option>';}).join('');
+    cn.innerHTML=opts;cl.innerHTML=opts;
+    if(ni>=0)cn.value=ni;if(li>=0)cl.value=li;
+    document.getElementById('levels-mapper').style.display='block';
+    cn.onchange=cl.onchange=updateLevelsPreview;updateLevelsPreview();
+  });
+}
+function updateLevelsPreview(){
+  var ni=+document.getElementById('col-name').value;
+  var li=+document.getElementById('col-level').value;
+  var html='<table class="preview-table"><tr><th>Navn</th><th>Nivå</th><th>Tolket</th></tr>';
+  levelsRaw.slice(0,5).forEach(function(r){
+    var nm=str(r[ni]),lv=str(r[li]),det=detectLevel(lv);
+    html+='<tr><td>'+nm+'</td><td>'+lv+'</td><td>'+(det?lvlBadge(det):'<span style="color:var(--danger)">?</span>')+'</td></tr>';
+  });
+  document.getElementById('levels-preview').innerHTML=html+'</table>';
+}
+function confirmLevels(){
+  var ni=+document.getElementById('col-name').value,li=+document.getElementById('col-level').value;
+  var ok=0,skip=0;allPlayers=[];
+  levelsRaw.forEach(function(r){var name=str(r[ni]),lvl=detectLevel(str(r[li]));if(name&&lvl){allPlayers.push({name:name,level:lvl});ok++;}else skip++;});
+  savePlayers();showBanner('levels','success',ok+' spillere lastet inn'+(skip?' ('+skip+' hoppet over)':''));
+  document.getElementById('levels-mapper').style.display='none';
+  document.getElementById('levels-done').textContent='✓ '+ok+' spillere lastet inn';
+  document.getElementById('levels-done').style.display='block';
+  document.getElementById('levels-saved-row').style.display='flex';
+  tryMatchAttending();updateSetupSummary();
+}
+
+function handleAttendFile(e){processAttendFile(e.target.files[0]);}
+function processAttendFile(file){
+  if(!file)return;
+  readXLSX(file,function(headers,rows){
+    attendHeaders=headers;attendRaw=rows;
+    var ni=headers.findIndex(function(h){return/navn|name|fornavn|spiller|member|deltaker/i.test(h);});
+    var si=headers.findIndex(function(h){return/status|svar|coming|deltar|attending/i.test(h);});
+    var cn=document.getElementById('col-attend-name');var cs=document.getElementById('col-attend-status');
+    var opts=headers.map(function(h,i){return'<option value="'+i+'">'+(h||'Kolonne '+(i+1))+'</option>';}).join('');
+    cn.innerHTML=opts;cs.innerHTML='<option value="-1">— Ingen statusfilter —</option>'+opts;
+    if(ni>=0)cn.value=ni;if(si>=0)cs.value=si;
+    document.getElementById('attend-mapper').style.display='block';
+    cn.onchange=cs.onchange=updateAttendPreview;updateAttendPreview();
+  });
+}
+function updateAttendPreview(){
+  var ni=+document.getElementById('col-attend-name').value;
+  var si=+document.getElementById('col-attend-status').value;
+  var html='<table class="preview-table"><tr><th>Navn</th>'+(si>=0?'<th>Status</th>':'')+'</tr>';
+  attendRaw.slice(0,5).forEach(function(r){html+='<tr><td>'+str(r[ni])+'</td>'+(si>=0?'<td>'+str(r[si])+'</td>':'')+'</tr>';});
+  document.getElementById('attend-preview').innerHTML=html+'</table>';
+}
+function confirmAttend(){
+  var ni=+document.getElementById('col-attend-name').value;
+  var si=+document.getElementById('col-attend-status').value;
+  attendingNames=[];
+  attendRaw.forEach(function(r){
+    var name=str(r[ni]);if(!name)return;
+    if(si>=0){if(/kommer|yes|attending|1|true|coming/i.test(str(r[si])))attendingNames.push(name);}
+    else attendingNames.push(name);
+  });
+  showBanner('attend','success',attendingNames.length+' deltakere lastet inn');
+  document.getElementById('attend-mapper').style.display='none';
+  document.getElementById('attend-done').textContent='✓ '+attendingNames.length+' deltakere lastet inn';
+  document.getElementById('attend-done').style.display='block';
+  tryMatchAttending();updateSetupSummary();
+}
+
+function tryMatchAttending(){
+  if(!allPlayers.length||!attendingNames.length)return;
+  attendingPlayers=[];var unmatched=[];
+  attendingNames.forEach(function(name){var p=findPlayer(name);if(p)attendingPlayers.push({name:name,level:p.level});else unmatched.push(name);});
+  if(unmatched.length)showBanner('attend','warn',attendingPlayers.length+' matchet, '+unmatched.length+' ikke funnet: '+unmatched.slice(0,3).join(', ')+(unmatched.length>3?'…':''));
+}
+function findPlayer(name){
+  var n=name.trim().toLowerCase();
+  var d=allPlayers.find(function(p){return p.name.toLowerCase()===n;});if(d)return d;
+  var parts=n.split(' ');
+  return allPlayers.find(function(p){var kp=p.name.toLowerCase().split(' ');return parts[0]===kp[0]&&parts[parts.length-1]===kp[kp.length-1];})||
+    allPlayers.find(function(p){return p.name.toLowerCase().split(' ').pop()===parts[parts.length-1];});
+}
+function updateSetupSummary(){
+  var summary=document.getElementById('setup-summary');
+  var pool=attendingPlayers.length?attendingPlayers:allPlayers;
+  if(!pool.length){summary.style.display='none';return;}
+  summary.style.display='block';
+  var c=[0,0,0,0];pool.forEach(function(p){c[p.level]++;});
+  document.getElementById('setup-summary-text').innerHTML='<div class="stats-bar">'+
+    '<span class="stat-chip">👥 '+pool.length+' spillere'+(attendingPlayers.length?' deltar':' totalt')+'</span>'+
+    (c[1]?'<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+c[1]+'</span>':'')+
+    (c[2]?'<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+c[2]+'</span>':'')+
+    (c[3]?'<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+c[3]+'</span>':'')+
+    '</div>';
+}
+function clearPlayers(){
+  if(!confirm('Slette lagret nivåoversikt?'))return;
+  allPlayers=[];savePlayers();
+  document.getElementById('levels-done').style.display='none';
+  document.getElementById('levels-saved-row').style.display='none';
+  attendingPlayers=[];updateSetupSummary();
+}
+
+function renderPlayersList(){
+  var container=document.getElementById('players-list-container');
+  if(!allPlayers.length){container.innerHTML='<div class="empty"><div class="empty-icon">👥</div>Ingen spillere lastet inn ennå.</div>';return;}
+  var sorted=allPlayers.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
+  var counts=[0,0,0,0];allPlayers.forEach(function(p){counts[p.level]++;});
+  var html='<div class="stats-bar" style="margin-bottom:12px;">'+
+    '<span class="stat-chip">👥 '+allPlayers.length+' spillere totalt</span>'+
+    '<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+counts[1]+'</span>'+
+    '<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+counts[2]+'</span>'+
+    '<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+counts[3]+'</span>'+
+    '</div>';
+  var lvlLabels={1:'Nivå 1 — Mest øvede',2:'Nivå 2 — Middels',3:'Nivå 3 — Minst øvede'};
+  var curLevel=0;
+  sorted.forEach(function(p){
+    var idx=allPlayers.indexOf(p);
+    if(p.level!==curLevel){if(curLevel)html+='</div>';curLevel=p.level;html+='<div class="section-divider">'+lvlLabels[p.level]+' ('+counts[p.level]+')</div><div>';}
+    html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
+      '<span style="display:flex;align-items:center;gap:8px;flex:1;"><span class="lvl-dot lvl-dot-'+p.level+'"></span><span style="font-size:14px;">'+p.name+'</span></span>'+
+      '<span style="display:flex;align-items:center;gap:6px;">'+
+      '<select onchange="changePlayerLevel('+idx+',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:white;">'+
+      '<option value="1"'+(p.level==1?' selected':'')+'>Nivå 1</option>'+
+      '<option value="2"'+(p.level==2?' selected':'')+'>Nivå 2</option>'+
+      '<option value="3"'+(p.level==3?' selected':'')+'>Nivå 3</option>'+
+      '</select>'+
+      '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
+      '</span></div>';
+  });
+  if(curLevel)html+='</div>';
+  container.innerHTML=html;
+}
+function addPlayerManual(){
+  var nameEl=document.getElementById('new-player-name');var name=nameEl.value.trim();var level=+document.getElementById('new-player-level').value;
+  if(!name)return;
+  if(allPlayers.find(function(p){return p.name.toLowerCase()===name.toLowerCase();})){alert('Spilleren finnes allerede.');return;}
+  allPlayers.push({name:name,level:level});savePlayers();nameEl.value='';renderPlayersList();updateSetupSummary();
+}
+function changePlayerLevel(idx,lvl){allPlayers[idx].level=+lvl;savePlayers();renderPlayersList();updateSetupSummary();}
+function removePlayer(idx){if(!confirm('Fjerne '+allPlayers[idx].name+'?'))return;allPlayers.splice(idx,1);savePlayers();renderPlayersList();updateSetupSummary();}
+function exportPlayersExcel(){
+  if(!allPlayers.length){alert('Ingen spillere.');return;}
+  var wb=XLSX.utils.book_new();
+  var sorted=allPlayers.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
+  var rows=[['Navn','Nivå']].concat(sorted.map(function(p){return[p.name,p.level];}));
+  var ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Spillere');XLSX.writeFile(wb,'Fjellhamar_spilleroversikt.xlsx');
+}
+
+function setMode(m){
+  currentMode=m;
+  document.querySelectorAll('.mode-card').forEach(function(el){el.classList.remove('selected');});
+  document.getElementById('mode-'+m).classList.add('selected');
+}
+
+function generateGroups(){
+  var pool=attendingPlayers.length?attendingPlayers:allPlayers;
+  if(pool.length<2){showBanner('generate','error','Last opp filer og bekreft import på "Last opp"-siden først.');return;}
+  var n=+document.getElementById('num-groups').value;
+  var dateVal=document.getElementById('session-date').value;
+  var sessionType=document.getElementById('session-type').value;
+  var name=dateVal?new Date(dateVal).toLocaleDateString('nb-NO',{day:'numeric',month:'long',year:'numeric'}):new Date().toLocaleDateString('nb-NO',{day:'numeric',month:'long',year:'numeric'});
+  var rp=buildRecentPairs(sessionType);
+  var groups=currentMode==='adapted'?generateAdapted(pool,n,rp):generateBalanced(pool,n,rp);
+  pendingSession={name:name,sessionType:sessionType,mode:currentMode,groups:groups,date:new Date().toISOString()};
+  sessionGroups=pendingSession;renderResult(pendingSession,true);showPage('result');
+}
+function reGenerateGroups(){
+  var pool=attendingPlayers.length?attendingPlayers:allPlayers;
+  var rp=buildRecentPairs(pendingSession.sessionType);var n=pendingSession.groups.length;
+  var groups=pendingSession.mode==='adapted'?generateAdapted(pool,n,rp):generateBalanced(pool,n,rp);
+  pendingSession={name:pendingSession.name,sessionType:pendingSession.sessionType,mode:pendingSession.mode,groups:groups,date:new Date().toISOString()};
+  sessionGroups=pendingSession;renderResult(pendingSession,true);
+}
+function approveGroups(){
+  if(!pendingSession)return;
+  appHistory.unshift(pendingSession);if(appHistory.length>30)appHistory.pop();saveHistory();
+  pendingSession=null;
+  document.getElementById('result-pending').style.display='none';
+  document.getElementById('result-approved').style.display='block';
+}
+
+function shuffle(arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function buildRecentPairs(sessionType){
+  var pairs={};
+  appHistory.filter(function(s){return s.sessionType===sessionType;}).slice(0,8).forEach(function(s,si){
+    var w=8-si;
+    s.groups.forEach(function(g){for(var i=0;i<g.length;i++)for(var j=i+1;j<g.length;j++){var k=[g[i].name,g[j].name].sort().join('|');pairs[k]=(pairs[k]||0)+w;}});
+  });
+  return pairs;
+}
+function pairCost(group,pairs){var c=0;for(var i=0;i<group.length;i++)for(var j=i+1;j<group.length;j++)c+=pairs[[group[i].name,group[j].name].sort().join('|')]||0;return c;}
+
+function generateAdapted(pool,n,rp){
+  var l1=shuffle(pool.filter(function(p){return p.level===1;}));
+  var l2=shuffle(pool.filter(function(p){return p.level===2;}));
+  var l3=shuffle(pool.filter(function(p){return p.level===3;}));
+  var upperCount=Math.floor(n/2),lowerCount=n-upperCount;
+  var upperNeeded=Math.round((pool.length/n)*upperCount);
+  var upperPlayers=l1.concat(l2.slice(0,Math.max(0,upperNeeded-l1.length)));
+  var lowerPlayers=l2.slice(Math.max(0,upperNeeded-l1.length)).concat(l3);
+  function snakeDraft(players,ng){
+    var grps=[];for(var k=0;k<ng;k++)grps.push([]);
+    var sorted=players.slice().sort(function(a,b){return a.level-b.level;});
+    sorted.forEach(function(p,i){var round=Math.floor(i/ng),pos=i%ng;grps[round%2===0?pos:ng-1-pos].push(p);});
+    return grps;
+  }
+  var ug=snakeDraft(upperPlayers,upperCount),lg=snakeDraft(lowerPlayers,lowerCount);
+  function optimise(tg){
+    var ng=tg.length;if(ng<2)return;
+    for(var s=0;s<80;s++){
+      var t1=Math.floor(Math.random()*ng),t2=Math.floor(Math.random()*ng);
+      if(t1===t2||!tg[t1].length||!tg[t2].length)continue;
+      var i1=Math.floor(Math.random()*tg[t1].length),i2=Math.floor(Math.random()*tg[t2].length);
+      var p1=tg[t1][i1],p2=tg[t2][i2];
+      var before=pairCost(tg[t1],rp)+pairCost(tg[t2],rp);
+      tg[t1][i1]=p2;tg[t2][i2]=p1;
+      if(pairCost(tg[t1],rp)+pairCost(tg[t2],rp)>=before){tg[t1][i1]=p1;tg[t2][i2]=p2;}
+    }
+  }
+  optimise(ug);optimise(lg);return ug.concat(lg);
+}
+function generateBalanced(pool,n,rp){
+  var groups=[];for(var k=0;k<n;k++)groups.push([]);
+  [1,2,3].forEach(function(lvl,li){
+    var players=shuffle(pool.filter(function(p){return p.level===lvl;}));
+    var base=Math.floor(players.length/n),extra=players.length%n,idx=0;
+    for(var g=0;g<n;g++){var count=base+(g<extra?1:0);var gIdx=li%2===0?g:n-1-g;for(var k=0;k<count;k++){if(idx<players.length)groups[gIdx].push(players[idx++]);}}
+  });
+  for(var s=0;s<120;s++){
+    var t1=Math.floor(Math.random()*n),t2=Math.floor(Math.random()*n);
+    if(t1===t2||!groups[t1].length||!groups[t2].length)continue;
+    var i1=Math.floor(Math.random()*groups[t1].length),i2=Math.floor(Math.random()*groups[t2].length);
+    var p1=groups[t1][i1],p2=groups[t2][i2];
+    if(p1.level!==p2.level)continue;
+    var before=pairCost(groups[t1],rp)+pairCost(groups[t2],rp);
+    groups[t1][i1]=p2;groups[t2][i2]=p1;
+    if(pairCost(groups[t1],rp)+pairCost(groups[t2],rp)>=before){groups[t1][i1]=p1;groups[t2][i2]=p2;}
+  }
+  return groups;
+}
+
+function renderResult(session,pending){
+  document.getElementById('result-empty').style.display='none';
+  document.getElementById('result-content').style.display='block';
+  document.getElementById('result-pending').style.display=pending?'block':'none';
+  document.getElementById('result-approved').style.display='none';
+  document.getElementById('result-title').textContent=session.name;
+  var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
+  var tl={trening:'🏃 Trening',seriekamp:'⚽ Seriekamper',cupkamp:'🏆 Cupkamper'};
+  document.getElementById('result-meta').textContent=(tl[session.sessionType]||'')+' · '+ml[session.mode]+' · '+session.groups.length+' grupper · '+session.groups.flat().length+' spillere';
+  var n=session.groups.length,upperCount=session.mode==='adapted'?Math.floor(n/2):0,html='';
+  session.groups.forEach(function(group,i){
+    var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
+    var sorted=group.slice().sort(function(a,b){return a.level-b.level;});
+    if(session.mode==='adapted'&&i===0)html+=divider('Øvre nivå');
+    if(session.mode==='adapted'&&i===upperCount&&upperCount>0)html+=divider('Nedre nivå');
+    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?'<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; Gruppe '+i+'</span>':'';
+    html+='<div class="group-card"><div class="group-header"><span class="group-name">Gruppe '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
+    sorted.forEach(function(p){html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span><span class="lvl-badge lvl-badge-'+p.level+'">Nivå '+p.level+'</span></div>';});
+    html+='<div class="stats-bar" style="margin-top:10px;">';
+    if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
+    if(c[2])html+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">'+c[2]+'&#xD7; N2</span>';
+    if(c[3])html+='<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">'+c[3]+'&#xD7; N3</span>';
+    html+='</div></div></div>';
+  });
+  document.getElementById('groups-output').innerHTML=html;
+}
+function divider(label){return'<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:11px;color:var(--slate-light);white-space:nowrap;">'+label+'</span><div style="flex:1;height:1px;background:var(--border);"></div></div>';}
+
+function exportExcel(){
+  if(!sessionGroups)return;
+  var wb=XLSX.utils.book_new();
+  var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
+  var titleText=(tl[sessionGroups.sessionType]||'')+' · '+sessionGroups.name;
+  var rows=[[titleText],[],['Navn','Nivå  \u2190 slett denne kolonnen f\u00f8r deling']];
+  var playerRows=[],groupHeaderRows=[],rowIdx=3;
+  sessionGroups.groups.forEach(function(g,i){
+    rows.push(['Gruppe '+(i+1)]);groupHeaderRows.push(rowIdx);rowIdx++;
+    g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){rows.push([p.name,'Niv\u00e5 '+p.level]);playerRows.push({r:rowIdx});rowIdx++;});
+    rows.push([]);rowIdx++;
+  });
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  var hFill={patternType:'solid',fgColor:{rgb:'1F4E79'}};
+  var subFill={patternType:'solid',fgColor:{rgb:'BDD7EE'}};
+  var yelFill={patternType:'solid',fgColor:{rgb:'FFFF00'}};
+  function sc(ref,font,fill,align){if(!ws[ref])ws[ref]={t:'s',v:''};ws[ref].s={font:font||{},fill:fill||{},alignment:align||{}};}
+  var left={horizontal:'left',vertical:'center'},ctr={horizontal:'center',vertical:'center'};
+  sc('A1',{bold:true,color:{rgb:'FFFFFF'},sz:12},hFill,left);
+  sc('A3',{bold:true,color:{rgb:'FFFFFF'},sz:10},{patternType:'solid',fgColor:{rgb:'2E75B6'}},ctr);
+  sc('B3',{bold:true,sz:10},yelFill,ctr);
+  groupHeaderRows.forEach(function(r){var ref='A'+(r+1);if(ws[ref])ws[ref].s={font:{bold:true,sz:10},fill:subFill,alignment:left};var rb='B'+(r+1);if(!ws[rb])ws[rb]={t:'s',v:''};ws[rb].s={fill:subFill};});
+  playerRows.forEach(function(pr){var rb='B'+(pr.r+1);if(ws[rb])ws[rb].s={font:{sz:10},fill:yelFill,alignment:ctr};});
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}}];ws['!cols']=[{wch:34},{wch:32}];
+  XLSX.utils.book_append_sheet(wb,ws,'Grupper');
+  XLSX.writeFile(wb,'Lagdeling_'+sessionGroups.name.replace(/[^a-zA-Z0-9\u00e6\u00f8\u00e5\u00c6\u00d8\u00c5]/g,'_')+'.xlsx');
+}
+
+function copyToClipboard(){
+  if(!sessionGroups)return;
+  var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
+  var text=sessionGroups.name+' \u00b7 '+(tl[sessionGroups.sessionType]||'')+'\n\n';
+  sessionGroups.groups.forEach(function(g,i){
+    text+='Gruppe '+(i+1)+':\n';
+    g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){text+='  '+p.name+'\n';});
+    text+='\n';
+  });
+  navigator.clipboard.writeText(text).then(function(){
+    var btn=document.querySelector('.export-row .btn-gold');
+    btn.textContent='\u2713 Kopiert!';setTimeout(function(){btn.textContent='\uD83D\uDCCB Kopier tekst';},2000);
+  });
+}
+
+function renderHistory(){
+  var el=document.getElementById('history-content');
+  if(!appHistory.length){el.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDD50</div>Ingen historikk enn\u00e5</div>';return;}
+  var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
+  var tl={trening:'\uD83C\uDFC3 Trening',seriekamp:'\u26BD Seriekamper',cupkamp:'\uD83C\uDFC6 Cupkamper'};
+  el.innerHTML=appHistory.map(function(s,i){
+    var date=new Date(s.date).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric'});
+    var typeKey=s.sessionType||'unknown';
+    return'<div class="history-session">'+
+      '<div class="history-session-header type-'+typeKey+'" onclick="toggleHistory('+i+')">'+
+        '<div style="flex:1;">'+
+          '<div><span class="type-pill type-pill-'+typeKey+'">'+(tl[typeKey]||typeKey)+'</span></div>'+
+          '<div class="history-session-title">'+s.name+'</div>'+
+          '<div class="history-session-meta">'+date+' \u00b7 '+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>'+
+        '</div>'+
+        '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="openShareModal(event,'+i+')">\uD83D\uDCE4 Del</button>'+
+        '<button class="btn btn-danger btn-sm" style="margin-right:8px;flex-shrink:0;" onclick="deleteSession(event,'+i+')">Slett</button>'+
+        '<span style="font-size:12px;color:var(--slate-light);flex-shrink:0;" id="hist-chevron-'+i+'">\u25BC</span>'+
+      '</div>'+
+      '<div class="history-session-body" id="hist-body-'+i+'">'+
+        s.groups.map(function(g,gi){return'<div class="history-group"><div class="history-group-name">Gruppe '+(gi+1)+'</div><div style="font-size:13px;line-height:1.8;">'+g.slice().sort(function(a,b){return a.level-b.level;}).map(function(p){return p.name;}).join(', ')+'</div></div>';}).join('')+
+      '</div></div>';
+  }).join('');
+}
+function toggleHistory(i){
+  var body=document.getElementById('hist-body-'+i);var chev=document.getElementById('hist-chevron-'+i);
+  var open=body.classList.toggle('open');chev.textContent=open?'\u25B2':'\u25BC';
+}
+function clearHistory(){if(!confirm('Slette all historikk?'))return;appHistory=[];saveHistory();renderHistory();}
+function deleteSession(e,i){e.stopPropagation();if(!confirm('Slette denne \u00f8kten?'))return;appHistory.splice(i,1);saveHistory();renderHistory();}
+
+function openShareModal(e,idx){
+  e.stopPropagation();shareSession=appHistory[idx];
+  renderShareCard(shareSession);document.getElementById('share-modal').classList.add('open');
+}
+function closeShareModal(){document.getElementById('share-modal').classList.remove('open');}
+function closeShareModalOutside(e){if(e.target===document.getElementById('share-modal'))closeShareModal();}
+
+function renderShareCard(s){
+  var tl={trening:'\uD83C\uDFC3 Trening',seriekamp:'\u26BD Seriekamper',cupkamp:'\uD83C\uDFC6 Cupkamper'};
+  var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
+  var typeKey=s.sessionType||'trening';
+  var upperCount=s.mode==='adapted'?Math.floor(s.groups.length/2):0;
+  var html='<div class="share-card" id="share-card-inner">';
+  html+='<div class="share-card-header">';
+  html+='<div class="share-card-club">Fjellhamar FK \u00b7 Gutter 2016</div>';
+  html+='<div class="share-card-title">'+s.name+'</div>';
+  html+='<div class="share-card-meta">'+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' grupper \u00b7 '+s.groups.flat().length+' spillere</div>';
+  html+='<div class="share-card-type share-card-type-'+typeKey+'">'+(tl[typeKey]||typeKey)+'</div>';
+  html+='</div>';
+  if(s.mode==='adapted'){
+    html+=shareTierLabel('\u00d8vre niv\u00e5')+'<div class="share-groups-grid">';
+    s.groups.forEach(function(g,i){
+      if(i===upperCount&&upperCount>0)html+='</div>'+shareTierLabel('Nedre niv\u00e5')+'<div class="share-groups-grid">';
+      html+=shareGroupBox(g,i);
+    });
+    html+='</div>';
+  }else{
+    html+='<div class="share-groups-grid">';
+    s.groups.forEach(function(g,i){html+=shareGroupBox(g,i);});
+    html+='</div>';
+  }
+  html+='<div class="share-card-footer">Fjellhamar FK \u00b7 Lagdeling</div></div>';
+  document.getElementById('share-card-content').innerHTML=html;
+}
+function shareTierLabel(label){return'<div class="share-tier-label"><div></div><span>'+label+'</span><div></div></div>';}
+function shareGroupBox(g,i){
+  var sorted=g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
+  return'<div class="share-group-box"><div class="share-group-title">Gruppe '+(i+1)+'</div><div class="share-group-players">'+
+    sorted.map(function(p){return'<div class="share-player">'+p.name+'</div>';}).join('')+'</div></div>';
+}
+
+function copyShareText(){
+  if(!shareSession)return;
+  var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
+  var text='Fjellhamar FK \u00b7 Gutter 2016\n'+shareSession.name+' \u00b7 '+(tl[shareSession.sessionType]||'')+'\n\n';
+  var upperCount=shareSession.mode==='adapted'?Math.floor(shareSession.groups.length/2):0;
+  shareSession.groups.forEach(function(g,i){
+    if(shareSession.mode==='adapted'){
+      if(i===0)text+='\u2014 \u00d8vre niv\u00e5 \u2014\n';
+      if(i===upperCount&&upperCount>0)text+='\n\u2014 Nedre niv\u00e5 \u2014\n';
+    }
+    text+='\nGruppe '+(i+1)+':\n';
+    g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
+  });
+  navigator.clipboard.writeText(text).then(function(){
+    var btn=document.querySelector('.modal-actions .btn-primary');
+    btn.textContent='\u2713 Kopiert!';setTimeout(function(){btn.textContent='\uD83D\uDCCB Kopier tekst';},2000);
+  });
+}
+
+function openPrintWindow(){
+  var inner=document.getElementById('share-card-inner');
+  if(!inner)return;
+  var cardHTML=inner.outerHTML;
+  var printHTML='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Gruppeoversikt</title>'+
+    '<style>'+
+    '*{box-sizing:border-box;margin:0;padding:0;}'+
+    'body{font-family:Arial,sans-serif;background:white;padding:24px;color:#1B2838;}'+
+    '.share-card{padding:20px;}'+
+    '.share-card-header{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1B2838;}'+
+    '.share-card-club{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#4A5568;margin-bottom:3px;}'+
+    '.share-card-title{font-size:20px;font-weight:800;color:#1B2838;line-height:1.1;}'+
+    '.share-card-meta{font-size:12px;color:#4A5568;margin-top:4px;}'+
+    '.share-card-type{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;margin-top:6px;background:#D8F3DC;color:#2D6A4F;}'+
+    '.share-tier-label{display:flex;align-items:center;gap:8px;margin:12px 0 8px;}'+
+    '.share-tier-label span{font-size:10px;color:#888;white-space:nowrap;letter-spacing:.06em;text-transform:uppercase;}'+
+    '.share-tier-label div{flex:1;height:1px;background:#ddd;}'+
+    '.share-groups-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}'+
+    '.share-group-box{border:1.5px solid #DDE5D8;border-radius:10px;overflow:hidden;}'+
+    '.share-group-title{font-size:12px;font-weight:700;background:#1B2838;color:white;padding:6px 12px;letter-spacing:.04em;}'+
+    '.share-group-players{padding:8px 12px;}'+
+    '.share-player{font-size:13px;padding:4px 0;border-bottom:1px solid #F0F4F0;color:#1B2838;}'+
+    '.share-player:last-child{border-bottom:none;}'+
+    '.share-card-footer{margin-top:14px;padding-top:10px;border-top:1px solid #DDE5D8;font-size:10px;color:#4A5568;text-align:center;letter-spacing:.04em;}'+
+    '@media print{body{padding:0;}}'+
+    '</style></head><body>'+cardHTML+'</body></html>';
+  var blob=new Blob([printHTML],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var win=window.open(url,'_blank');
+  if(win){win.onload=function(){URL.revokeObjectURL(url);win.print();};}
+}
+
+function readXLSX(file,cb){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(rows.length<2)return;
+    cb(rows[0].map(function(h){return str(h);}),rows.slice(1).filter(function(r){return r.some(function(c){return str(c);});}));
+  };
+  reader.readAsArrayBuffer(file);
+}
+function str(v){return String(v==null?'':v).trim();}
+function detectLevel(v){
+  var s=v.toLowerCase();
+  if(['1','nybegynner','beginner','best','a','rød','rod','red'].indexOf(s)>=0)return 1;
+  if(['2','middels','medium','mid','gul','yellow','b'].indexOf(s)>=0)return 2;
+  if(['3','lavest','lav','low','grønn','gronn','green','c'].indexOf(s)>=0)return 3;
+  var n=parseInt(s);if(!isNaN(n)&&n>=1&&n<=3)return n;return null;
+}
+function lvlBadge(lvl){var labels={1:'Niv\u00e5 1',2:'Niv\u00e5 2',3:'Niv\u00e5 3'};return'<span class="tag tag-'+lvl+'">'+labels[lvl]+'</span>';}
+function showBanner(area,type,msg){
+  var id=area==='levels'?'banner-levels':area==='attend'?'banner-attend':'banner-generate';
+  var el=document.getElementById(id);el.className='banner banner-'+type;el.textContent=msg;el.style.display='block';
+}
+
+init();
+initFirebase();
+</script>
+</body>
+</html>
