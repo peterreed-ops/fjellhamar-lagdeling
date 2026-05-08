@@ -285,21 +285,55 @@
 <div id="page-setup" class="page active">
   <div class="section-divider">Hvem møter opp i dag?</div>
   <div class="card">
-    <div class="upload-zone" id="zone-attend" onclick="document.getElementById('file-attend').click()" ondragover="dragOver(event,'zone-attend')" ondragleave="dragLeave('zone-attend')" ondrop="dropFile(event,'attend')">
-      <input type="file" id="file-attend" accept=".xlsx,.xls,.csv" onchange="handleAttendFile(event)" />
-      <div class="upload-icon">📅</div><div class="upload-title">Last opp oppmøteliste</div>
-      <div class="upload-sub">Spond-eksport eller annen liste over hvem som deltar</div>
-      <div class="upload-done" id="attend-done" style="display:none;"></div>
+
+    <!-- Velg importformat -->
+    <div style="display:flex;gap:0;margin-bottom:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+      <button id="btn-spond" class="auth-tab active" onclick="setAttendMode('spond')" style="flex:1;">
+        📱 Spond-eksport
+      </button>
+      <button id="btn-custom" class="auth-tab" onclick="setAttendMode('custom')" style="flex:1;">
+        📄 Egendefinert
+      </button>
     </div>
-    <div id="banner-attend" class="banner"></div>
-    <div id="attend-mapper" style="display:none;margin-top:12px;">
-      <div class="col-map-grid">
-        <div><label>Navnekolonne</label><select id="col-attend-name" onchange="updateAttendPreview()" style="width:100%;"></select></div>
-        <div><label>Statuskolonne (valgfri)</label><select id="col-attend-status" onchange="updateAttendPreview()" style="width:100%;"></select></div>
+
+    <!-- SPOND-modus -->
+    <div id="attend-spond-mode">
+      <div style="font-size:12px;color:var(--slate-light);margin-bottom:10px;padding:8px 10px;background:var(--fog);border-radius:var(--radius-sm);">
+        Last opp Spond-eksport direkte. Appen henter automatisk deltakerne fra fanen <strong>"For import"</strong> med status <strong>Deltok</strong> eller <strong>Kommer</strong>.
       </div>
-      <div id="attend-preview"></div>
-      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmAttend()">✓ Bekreft import</button></div>
+      <div class="upload-zone" id="zone-spond" onclick="document.getElementById('file-spond').click()" ondragover="dragOver(event,'zone-spond')" ondragleave="dragLeave('zone-spond')" ondrop="dropFile(event,'spond')">
+        <input type="file" id="file-spond" accept=".xlsx,.xls" onchange="handleSpondFile(event)" />
+        <div class="upload-icon">📱</div>
+        <div class="upload-title">Last opp Spond-eksport</div>
+        <div class="upload-sub">.xlsx fil eksportert direkte fra Spond</div>
+        <div class="upload-done" id="spond-done" style="display:none;"></div>
+      </div>
+      <div id="banner-spond" class="banner"></div>
     </div>
+
+    <!-- EGENDEFINERT-modus -->
+    <div id="attend-custom-mode" style="display:none;">
+      <div style="font-size:12px;color:var(--slate-light);margin-bottom:10px;padding:8px 10px;background:var(--fog);border-radius:var(--radius-sm);">
+        Last opp en Excel-fil med egendefinert format. Velg selv hvilken kolonne som inneholder navn og evt. status.
+      </div>
+      <div class="upload-zone" id="zone-attend" onclick="document.getElementById('file-attend').click()" ondragover="dragOver(event,'zone-attend')" ondragleave="dragLeave('zone-attend')" ondrop="dropFile(event,'attend')">
+        <input type="file" id="file-attend" accept=".xlsx,.xls,.csv" onchange="handleAttendFile(event)" />
+        <div class="upload-icon">📄</div>
+        <div class="upload-title">Last opp oppmøteliste</div>
+        <div class="upload-sub">Excel eller CSV med navn og valgfri statuskolonne</div>
+        <div class="upload-done" id="attend-done" style="display:none;"></div>
+      </div>
+      <div id="banner-attend" class="banner"></div>
+      <div id="attend-mapper" style="display:none;margin-top:12px;">
+        <div class="col-map-grid">
+          <div><label>Navnekolonne</label><select id="col-attend-name" onchange="updateAttendPreview()" style="width:100%;"></select></div>
+          <div><label>Statuskolonne (valgfri)</label><select id="col-attend-status" onchange="updateAttendPreview()" style="width:100%;"></select></div>
+        </div>
+        <div id="attend-preview"></div>
+        <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmAttend()">✓ Bekreft import</button></div>
+      </div>
+    </div>
+
   </div>
   <div id="setup-summary" style="display:none;">
     <div class="legend">
@@ -1025,9 +1059,13 @@ function revokeAccess(email, name){
 function dragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
 function dragLeave(id){document.getElementById(id).classList.remove('drag-over');}
 function dropFile(e,type){
-  e.preventDefault();dragLeave(type==='levels'?'zone-levels':'zone-attend');
+  e.preventDefault();
+  var zoneId=type==='levels'?'zone-levels':type==='spond'?'zone-spond':'zone-attend';
+  dragLeave(zoneId);
   var file=e.dataTransfer.files[0];if(!file)return;
-  if(type==='levels')processLevelsFile(file);else processAttendFile(file);
+  if(type==='levels')processLevelsFile(file);
+  else if(type==='spond')processSpondFile(file);
+  else processAttendFile(file);
 }
 
 function handleLevelsFile(e){processLevelsFile(e.target.files[0]);}
@@ -1068,7 +1106,79 @@ function confirmLevels(){
   tryMatchAttending();updateSetupSummary();
 }
 
-function handleAttendFile(e){processAttendFile(e.target.files[0]);}
+// ── ATTEND MODE TOGGLE ─────────────────────────────────────────
+function setAttendMode(mode){
+  var isSpond = mode === 'spond';
+  document.getElementById('btn-spond').classList.toggle('active', isSpond);
+  document.getElementById('btn-custom').classList.toggle('active', !isSpond);
+  document.getElementById('attend-spond-mode').style.display  = isSpond  ? 'block' : 'none';
+  document.getElementById('attend-custom-mode').style.display = !isSpond ? 'block' : 'none';
+}
+
+// ── SPOND IMPORT ───────────────────────────────────────────────
+function handleSpondFile(e){ processSpondFile(e.target.files[0]); }
+
+function processSpondFile(file){
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+
+      // Finn "For import"-arket
+      var sheetName = wb.SheetNames.find(function(n){ return /for import/i.test(n); });
+      if(!sheetName){
+        showBanner('spond','error','Finner ikke fanen "For import" i filen. Er dette en Spond-eksport?');
+        return;
+      }
+
+      var ws   = wb.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Finn overskriftsraden (Status / Navn)
+      var headerRow = -1;
+      for(var i=0; i<rows.length; i++){
+        if(str(rows[i][0]).toLowerCase()==='status' && str(rows[i][1]).toLowerCase()==='navn'){
+          headerRow = i; break;
+        }
+      }
+      if(headerRow < 0){
+        showBanner('spond','error','Finner ikke kolonneoverskriftene "Status" og "Navn" i fanen.');
+        return;
+      }
+
+      // Hent navn der status er Deltok / Kommer / Coming / Attending
+      var deltakerStatusRegex = /deltok|kommer|coming|attending|yes|ja/i;
+      attendingNames = [];
+      for(var r = headerRow+1; r < rows.length; r++){
+        var status = str(rows[r][0]);
+        var navn   = str(rows[r][1]);
+        if(navn && deltakerStatusRegex.test(status)){
+          attendingNames.push(navn);
+        }
+      }
+
+      if(attendingNames.length === 0){
+        showBanner('spond','warn','Ingen deltakere med status "Deltok" eller "Kommer" ble funnet.');
+        return;
+      }
+
+      // Vis bekreftelse
+      showBanner('spond','success', attendingNames.length + ' deltakere importert fra Spond');
+      document.getElementById('spond-done').textContent = '✓ ' + attendingNames.length + ' deltakere lastet inn';
+      document.getElementById('spond-done').style.display = 'block';
+
+      tryMatchAttending();
+      updateSetupSummary();
+
+    }catch(err){
+      showBanner('spond','error','Kunne ikke lese filen: '+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── ATTEND FILE (egendefinert) ─────────────────────────────────
 function processAttendFile(file){
   if(!file)return;
   readXLSX(file,function(headers,rows){
@@ -1540,7 +1650,7 @@ function detectLevel(v){
 }
 function lvlBadge(lvl){var labels={1:'Niv\u00e5 1',2:'Niv\u00e5 2',3:'Niv\u00e5 3'};return'<span class="tag tag-'+lvl+'">'+labels[lvl]+'</span>';}
 function showBanner(area,type,msg){
-  var id=area==='levels'?'banner-levels':area==='attend'?'banner-attend':'banner-generate';
+  var id=area==='levels'?'banner-levels':area==='spond'?'banner-spond':area==='attend'?'banner-attend':'banner-generate';
   var el=document.getElementById(id);el.className='banner banner-'+type;el.textContent=msg;el.style.display='block';
 }
 
