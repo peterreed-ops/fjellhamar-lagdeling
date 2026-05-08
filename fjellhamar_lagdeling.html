@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Lagdeling — Fjellhamar FK G2016</title>
+<title>Lagdeling — Fjellhamar FK</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -184,6 +184,9 @@
 
   @media(max-width:480px){.mode-grid{grid-template-columns:1fr;}.col-map-grid{grid-template-columns:1fr;}.main{padding:1rem;}.app-header{padding:1rem;}.request-card{flex-direction:column;align-items:flex-start;}}
 
+  /* LAGVELGER */
+  #team-selector-overlay{align-items:center;justify-content:center;}
+
   /* AUTH */
   .auth-overlay{display:flex;position:fixed;inset:0;background:var(--slate);z-index:999;align-items:center;justify-content:center;padding:1rem;}
   .auth-box{background:white;border-radius:var(--radius);width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);}
@@ -209,6 +212,8 @@
   .auth-user-bar{display:flex;align-items:center;gap:10px;margin-left:auto;}
   .auth-user-name{font-size:12px;color:rgba(255,255,255,.7);}
   .auth-signout{font-size:12px;padding:4px 10px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;}
+  #team-switch-btn{font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;white-space:nowrap;}
+  #team-switch-btn:hover{background:rgba(200,168,75,.15);}
   .auth-signout:hover{background:rgba(255,255,255,.1);color:white;}
 </style>
 </head>
@@ -242,7 +247,17 @@
       <div id="auth-register" style="display:none;">
         <div class="auth-field"><label>Navn</label><input type="text" id="reg-name" placeholder="Fullt navn" /></div>
         <div class="auth-field"><label>E-post</label><input type="email" id="reg-email" placeholder="din@epost.no" /></div>
-        <div class="auth-field"><label>Ønsket passord</label><input type="password" id="reg-password" placeholder="Minst 6 tegn" /></div>
+        <div class="auth-field"><label>Ønsket passord (min. 6 tegn)</label><input type="password" id="reg-password" placeholder="••••••••" /></div>
+        <div class="auth-field">
+          <label>Hvilket lag ønsker du tilgang til?</label>
+          <select id="reg-team-select" style="width:100%;" onchange="regTeamSelectChange()">
+            <option value="">-- Laster lag... --</option>
+          </select>
+        </div>
+        <div class="auth-field" id="reg-team-custom-wrap" style="display:none;">
+          <label>Beskriv laget (f.eks. "Gutter 2015")</label>
+          <input type="text" id="reg-team-custom" placeholder="Gutter 2015 / Jenter 2017" />
+        </div>
         <button class="auth-btn" onclick="doRegister()">Send forespørsel</button>
       </div>
 
@@ -476,8 +491,37 @@
 
 <!-- ADMIN -->
 <div id="page-admin" class="page">
+  <!-- SUPERADMIN: Lag-administrasjon -->
+  <div id="admin-superadmin-section" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="section-divider" style="margin:0;">Lag i systemet</div>
+      <button class="btn btn-primary btn-sm" onclick="showCreateTeamForm()">+ Nytt lag</button>
+    </div>
+    <div id="create-team-form" style="display:none;" class="card">
+      <div class="card-title">Opprett nytt lag</div>
+      <div class="form-row">
+        <select id="new-team-gender" class="flex-1"><option value="Gutter">Gutter</option><option value="Jenter">Jenter</option><option value="Mikset">Mikset</option></select>
+        <input type="text" id="new-team-years" class="flex-1" placeholder="Fødselsår, f.eks. 2016 eller 2015/2016" />
+      </div>
+      <div class="form-row">
+        <input type="text" id="new-team-extra" class="flex-1" placeholder="Tilleggsnavn (valgfritt, f.eks. A-lag)" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="createTeam()">Opprett lag</button>
+        <button class="btn btn-sm" onclick="document.getElementById('create-team-form').style.display='none'">Avbryt</button>
+      </div>
+    </div>
+    <div id="admin-teams-list"><div class="empty"><div class="empty-icon">⚽</div>Klikk "Lag i systemet" for å laste</div></div>
+    <div class="section-divider" style="margin-top:1.5rem;">Alle tilgangsforespørsler (alle lag)</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="btn btn-sm" onclick="loadAllRequests()">🔄 Last alle forespørsler</button>
+    </div>
+    <div id="admin-all-requests-list"><div class="empty"><div class="empty-icon">📋</div>Klikk Last for å se</div></div>
+    <div style="height:1px;background:var(--border);margin:1.5rem 0;"></div>
+  </div>
+
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-    <div class="section-divider" style="margin:0;">Tilgangsforespørsler</div>
+    <div class="section-divider" style="margin:0;">Tilgangsforespørsler — <span id="admin-team-label">dette laget</span></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-sm" onclick="loadAdminRequests()">🔄 Oppdater</button>
       <button class="btn btn-sm" id="btn-show-history-requests" onclick="loadRequestHistory()">🕐 Vis historikk</button>
@@ -544,19 +588,45 @@ var firebaseConfig = {
   appId:             "1:471205098772:web:888b24cc1eb308bcc9fe01"
 };
 // ─────────────────────────────────────────────────────────────────
-var ADMIN_EMAIL='peter.reed@online.no';
+var SUPERADMIN_EMAIL='peter.reed@online.no';
+var ADMIN_EMAIL='peter.reed@online.no'; // kept for compat
 var fbAuth,fbDb;
+// Multi-team state
+var currentTeamId='g2016'; // default team
+var currentTeamName='Gutter 2016';
+var userTeams=[]; // teams user has access to
+var availableTeams=[]; // all teams (for registration)
+var currentUserRole='trener';
 
 function initFirebase(){
-  // Vis "lokal test"-knapp automatisk hvis filen åpnes direkte fra disk
-  if(window.location.protocol === 'file:') {
-    document.getElementById('local-test-bar').style.display = 'block';
+  if(window.location.protocol==='file:'){
+    document.getElementById('local-test-bar').style.display='block';
   }
   try{
     firebase.initializeApp(firebaseConfig);
     fbAuth=firebase.auth();fbDb=firebase.firestore();
+    // Load available teams for registration dropdown
+    loadAvailableTeams();
     fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
   }catch(e){console.warn('Firebase ikke konfigurert:',e.message);showAuthOverlay(false);}
+}
+
+function loadAvailableTeams(){
+  if(!fbDb)return;
+  fbDb.collection('teams').orderBy('name').get().then(function(snap){
+    availableTeams=[];
+    snap.forEach(function(doc){availableTeams.push(Object.assign({id:doc.id},doc.data()));});
+    var sel=document.getElementById('reg-team-select');
+    if(!sel)return;
+    sel.innerHTML='<option value="">-- Velg lag --</option>';
+    availableTeams.forEach(function(t){sel.innerHTML+='<option value="'+t.id+'">'+t.name+'</option>';});
+    sel.innerHTML+='<option value="__custom__">Annet / Nytt lag (beskriv)</option>';
+  }).catch(function(){});
+}
+
+function regTeamSelectChange(){
+  var v=document.getElementById('reg-team-select').value;
+  document.getElementById('reg-team-custom-wrap').style.display=(v==='__custom__')?'block':'none';
 }
 
 function skipAuthForTesting(){
@@ -564,8 +634,8 @@ function skipAuthForTesting(){
   document.getElementById('auth-user-name').textContent='Lokal test';
   document.getElementById('auth-user-bar').style.display='flex';
   // Ved lokal testing — last fra localStorage
-  try{allPlayers=JSON.parse(localStorage.getItem('fk_players')||'[]');}catch(e){allPlayers=[];}
-  try{appHistory=JSON.parse(localStorage.getItem('fk_history')||'[]');}catch(e){appHistory=[];}
+  try{allPlayers=JSON.parse(localStorage.getItem('fk_players_'+currentTeamId)||'[]');}catch(e){allPlayers=[];}
+  try{appHistory=JSON.parse(localStorage.getItem('fk_history_'+currentTeamId)||'[]');}catch(e){appHistory=[];}
   var today=new Date().toISOString().split('T')[0];
   document.getElementById('session-date').value=today;
   if(allPlayers.length){
@@ -663,9 +733,12 @@ function doRegister(){
 }
 function doSignOut(){
   if(fbAuth)fbAuth.signOut();
-  currentUserEmail='';
+  currentUserEmail='';currentUserRole='';currentTeamId='';currentTeamName='';userTeams=[];
+  allPlayers=[];appHistory=[];attendingNames=[];attendingPlayers=[];
   document.getElementById('auth-user-bar').style.display='none';
   document.getElementById('tab-admin').style.display='none';
+  document.getElementById('team-switch-btn').style.display='none';
+  document.getElementById('header-team-name').textContent='Fjellhamar FK';
   showAuthOverlay(true);switchAuthTab('login');
 }
 function showAuthMsg(msg,type){var el=document.getElementById('auth-msg');el.textContent=msg;el.className='auth-msg auth-msg-'+type;el.style.display='block';}
@@ -681,20 +754,29 @@ var levelsRaw=[], levelsHeaders=[], attendRaw=[], attendHeaders=[];
 // Alle lagringer går til Firestore (delt mellom alle brukere)
 // localStorage brukes kun som fallback ved lokal testing
 
+// ── TEAM DATA PATHS ──────────────────────────────────────────
+function teamDataRef(doc){
+  // Store per-team data under teams/{teamId}/data/{doc}
+  return fbDb.collection('teams').doc(currentTeamId).collection('data').doc(doc);
+}
+function teamChangeLogRef(){
+  return fbDb.collection('teams').doc(currentTeamId).collection('change_log');
+}
+
 function savePlayers(){
   if(fbDb){
-    fbDb.collection('app_data').doc('players').set({data: JSON.stringify(allPlayers)})
+    teamDataRef('players').set({data: JSON.stringify(allPlayers)})
       .catch(function(e){console.warn('Firestore savePlayers feil:',e);});
   }
-  try{localStorage.setItem('fk_players',JSON.stringify(allPlayers));}catch(e){}
+  try{localStorage.setItem('fk_players_'+currentTeamId,JSON.stringify(allPlayers));}catch(e){}
 }
 
 function saveHistory(){
   if(fbDb){
-    fbDb.collection('app_data').doc('history').set({data: JSON.stringify(appHistory)})
+    teamDataRef('history').set({data: JSON.stringify(appHistory)})
       .catch(function(e){console.warn('Firestore saveHistory feil:',e);});
   }
-  try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
+  try{localStorage.setItem('fk_history_'+currentTeamId,JSON.stringify(appHistory));}catch(e){}
 }
 
 function loadFromFirestore(callback){
@@ -702,11 +784,11 @@ function loadFromFirestore(callback){
   var playersReady=false, historyReady=false;
 
   // Sanntidslytter for spillere
-  fbDb.collection('app_data').doc('players').onSnapshot(function(doc){
+  teamDataRef('players').onSnapshot(function(doc){
     if(doc.exists&&doc.data().data){
       try{allPlayers=JSON.parse(doc.data().data);}catch(e){allPlayers=[];}
     } else {
-      try{allPlayers=JSON.parse(localStorage.getItem('fk_players')||'[]');}catch(e){allPlayers=[];}
+      try{allPlayers=JSON.parse(localStorage.getItem('fk_players_'+currentTeamId)||'[]');}catch(e){allPlayers=[];}
     }
     if(!playersReady){
       playersReady=true;
@@ -724,17 +806,17 @@ function loadFromFirestore(callback){
     }
   }, function(e){
     console.warn('Firestore players lytter feil:',e);
-    try{allPlayers=JSON.parse(localStorage.getItem('fk_players')||'[]');}catch(err){allPlayers=[];}
+    try{allPlayers=JSON.parse(localStorage.getItem('fk_players_'+currentTeamId)||'[]');}catch(err){allPlayers=[];}
     playersReady=true;
     if(historyReady) callback();
   });
 
   // Sanntidslytter for historikk
-  fbDb.collection('app_data').doc('history').onSnapshot(function(doc){
+  teamDataRef('history').onSnapshot(function(doc){
     if(doc.exists&&doc.data().data){
       try{appHistory=JSON.parse(doc.data().data);}catch(e){appHistory=[];}
     } else {
-      try{appHistory=JSON.parse(localStorage.getItem('fk_history')||'[]');}catch(e){appHistory=[];}
+      try{appHistory=JSON.parse(localStorage.getItem('fk_history_'+currentTeamId)||'[]');}catch(e){appHistory=[];}
     }
     if(!historyReady){
       historyReady=true;
@@ -745,7 +827,7 @@ function loadFromFirestore(callback){
     }
   }, function(e){
     console.warn('Firestore history lytter feil:',e);
-    try{appHistory=JSON.parse(localStorage.getItem('fk_history')||'[]');}catch(err){appHistory=[];}
+    try{appHistory=JSON.parse(localStorage.getItem('fk_history_'+currentTeamId)||'[]');}catch(err){appHistory=[];}
     historyReady=true;
     if(playersReady) callback();
   });
@@ -778,7 +860,7 @@ function showPage(p){
   if(idx>=0&&tabs[idx])tabs[idx].classList.add('active');
   if(p==='history')renderHistory();
   if(p==='players')renderPlayersList();
-  if(p==='admin')loadAdminRequests();
+  if(p==='admin')loadAdminPage();
 }
 
 // ── ENDRINGSLOGG ───────────────────────────────────────────────
@@ -791,7 +873,7 @@ function logChange(action, details){
     details: details,
     timestamp: new Date().toISOString()
   };
-  fbDb.collection('change_log').add(entry)
+  teamChangeLogRef().add(entry)
     .catch(function(e){ console.warn('Logg feil:', e); });
 }
 
@@ -828,7 +910,7 @@ function loadAdminLog(){
   if(!fbDb)return;
   var container=document.getElementById('admin-log-list');
   container.innerHTML='<div class="empty"><div class="empty-icon">\u23F3</div>Laster...</div>';
-  fbDb.collection('change_log').orderBy('timestamp','desc').limit(200).get()
+  teamChangeLogRef().orderBy('timestamp','desc').limit(200).get()
     .then(function(snap){
       if(snap.empty){container.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDCCB</div>Loggen er tom</div>';return;}
       var html='';
@@ -854,14 +936,14 @@ function loadAdminLog(){
 
 function deleteLogEntry(docId){
   if(!confirm('Slette denne loggoppf\u00f8ringen?'))return;
-  fbDb.collection('change_log').doc(docId).delete()
+  teamChangeLogRef().doc(docId).delete()
     .then(function(){loadAdminLog();})
     .catch(function(e){alert('Feil: '+e.message);});
 }
 
 function clearAllLog(){
   if(!confirm('Slette HELE endringsloggen?\n\nDette kan ikke angres.'))return;
-  fbDb.collection('change_log').orderBy('timestamp').get()
+  teamChangeLogRef().orderBy('timestamp').get()
     .then(function(snap){
       var batch=fbDb.batch();
       snap.forEach(function(doc){batch.delete(doc.ref);});
@@ -875,8 +957,118 @@ function clearAllLog(){
 
 var currentUserEmail='';
 
+function loadAdminPage(){
+  var isSA=currentUserRole==='superadmin';
+  document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
+  document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
+  if(isSA){loadTeamsList();loadAllRequests();}
+  loadAdminRequests();loadApprovedUsers();
+}
+
+// ── SUPERADMIN TEAM MANAGEMENT ─────────────────────────────────
+function showCreateTeamForm(){document.getElementById('create-team-form').style.display='block';}
+function createTeam(){
+  var gender=document.getElementById('new-team-gender').value;
+  var years=document.getElementById('new-team-years').value.trim();
+  var extra=document.getElementById('new-team-extra').value.trim();
+  if(!years){alert('Fyll inn f\u00f8dsels\u00e5r.');return;}
+  var name=gender+' '+years+(extra?' '+extra:'');
+  var id=name.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_');
+  fbDb.collection('teams').doc(id).set({name:name,gender:gender,years:years,extra:extra,created:new Date().toISOString()})
+    .then(function(){
+      document.getElementById('create-team-form').style.display='none';
+      document.getElementById('new-team-years').value='';document.getElementById('new-team-extra').value='';
+      loadTeamsList();loadAvailableTeams();
+      alert('Laget "'+name+'" er opprettet! ID: '+id);
+    }).catch(function(e){alert('Feil: '+e.message);});
+}
+function loadTeamsList(){
+  var list=document.getElementById('admin-teams-list');
+  if(!list)return;
+  fbDb.collection('teams').orderBy('name').get().then(function(snap){
+    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\u26BD</div>Ingen lag enn\u00e5. Opprett et lag ovenfor.</div>';return;}
+    var html='';
+    snap.forEach(function(doc){
+      var d=doc.data();
+      html+='<div class="user-card">'+
+        '<div><div style="font-weight:600;font-size:14px;">'+d.name+'</div><div style="font-size:12px;color:var(--slate-light);">ID: '+doc.id+'</div></div>'+
+        '<div style="display:flex;gap:8px;">'+
+          '<button class="btn btn-sm" onclick="switchActiveTeam(this)" data-id="'+doc.id+'" data-name="'+d.name.replace(/"/g,'&quot;')+'">Bytt til</button>'+
+          '<button class="btn btn-danger btn-sm" onclick="deleteTeam(this)" data-id="'+doc.id+'" data-name="'+d.name.replace(/"/g,'&quot;')+'">Slett</button>'+
+        '</div></div>';
+    });
+    list.innerHTML=html;
+  });
+}
+function switchActiveTeam(btn){
+  var id=btn.getAttribute('data-id');var name=btn.getAttribute('data-name');
+  currentTeamId=id;currentTeamName=name;
+  document.getElementById('header-team-name').textContent=name;
+  document.getElementById('admin-team-label').textContent=name;
+  allPlayers=[];appHistory=[];attendingPlayers=[];attendingNames=[];
+  document.getElementById('levels-done').style.display='none';
+  document.getElementById('levels-saved-row').style.display='none';
+  updateSetupSummary();
+  loadFromFirestore(function(){
+    if(allPlayers.length){document.getElementById('levels-done').textContent='\u2713 '+allPlayers.length+' spillere lastet';document.getElementById('levels-done').style.display='block';document.getElementById('levels-saved-row').style.display='flex';updateSetupSummary();}
+  });
+  loadAdminRequests();loadApprovedUsers();
+  alert('Byttet til laget "'+name+'"');
+}
+function deleteTeam(btn){
+  var id=btn.getAttribute('data-id');var name=btn.getAttribute('data-name');
+  if(!confirm('Slette laget "'+name+'" fra listen?\n\nSpillerdata slettes IKKE, kun lagets oppføring.'))return;
+  fbDb.collection('teams').doc(id).delete().then(function(){loadTeamsList();loadAvailableTeams();});
+}
+function loadAllRequests(){
+  var list=document.getElementById('admin-all-requests-list');if(!list)return;
+  fbDb.collection('access_requests').where('status','==','pending').orderBy('requested','desc').get().then(function(snap){
+    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Ingen ventende foresp\u00f8rsler</div>';return;}
+    var html='';
+    window._pendingRequests=window._pendingRequests||{};
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var dato=new Date(d.requested).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      var ph=d.passwordHint||d.password_hint||'';
+      html+='<div class="request-card">'+
+        '<div class="request-info"><div class="request-name">'+d.name+'</div><div class="request-email">'+d.email+'</div>'+
+        '<div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:2px;">\u26BD '+(d.teamName||'Ukjent lag')+'</div>'+
+        '<div class="request-date">'+dato+'</div></div>'+
+        '<div class="request-actions">'+
+        '<button class="btn btn-approve" onclick="approveFromCache(\''+doc.id+'\')">\u2713 Godkjenn</button>'+
+        '<button class="btn btn-reject" onclick="rejectFromCache(\''+doc.id+'\')">\u2715 Avvis</button>'+
+        '</div></div>';
+    });
+    list.innerHTML=html;
+  });
+}
+
+// ── APPROVE/REJECT ────────────────────────────────────────────
+function approveRequest(docId,name,email,teamId,teamName,passwordHint){
+  if(!confirm('Godkjenne '+name+' til laget "'+teamName+'"?'))return;
+  var password='';try{password=atob(passwordHint);}catch(e){}
+  if(!password){password=prompt('Skriv inn et midlertidig passord for '+name+':');if(!password)return;}
+  fbAuth.createUserWithEmailAndPassword(email,password)
+    .then(function(){
+      return fbDb.collection('team_members').add({email:email,name:name,teamId:teamId,teamName:teamName,role:'trener',approved:new Date().toISOString()});
+    }).then(function(){
+      return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
+    }).then(function(){
+      return fbAuth.currentUser&&fbAuth.currentUser.email!==currentUserEmail?fbAuth.signOut():Promise.resolve();
+    }).then(function(){
+      alert(name+' er godkjent for "'+teamName+'"!');
+      loadAdminRequests();loadApprovedUsers();loadAllRequests();
+    }).catch(function(err){
+      if(err.code==='auth/email-already-in-use'){
+        fbDb.collection('team_members').add({email:email,name:name,teamId:teamId,teamName:teamName,role:'trener',approved:new Date().toISOString()})
+          .then(function(){return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});})
+          .then(function(){alert(name+' er godkjent!');loadAdminRequests();loadApprovedUsers();loadAllRequests();});
+      }else{alert('Feil: '+err.message);}
+    });
+}
+
 function loadAdminRequests(){
-  if(!fbDb)return;
+  if(!fbDb||!currentTeamId)return;
   document.getElementById('btn-show-history-requests').textContent='\uD83D\uDD50 Vis historikk';
   fbDb.collection('access_requests').orderBy('requested','desc').get().then(function(snap){
     var list=document.getElementById('admin-requests-list');
@@ -897,7 +1089,7 @@ function loadAdminRequests(){
           '<div class="request-date">'+dato+'</div>'+
         '</div>'+
         '<div class="request-actions">'+
-          '<button class="btn btn-approve" onclick="approveRequest(\''+doc.id+'\',\''+d.name+'\',\''+d.email+'\',\''+d.password_hint+'\')">✓ Godkjenn</button>'+
+        '<button class="btn btn-approve" onclick="approveFromCache(\''+doc.id+'\')">\u2713 Godkjenn</button>'+
           '<button class="btn btn-reject" onclick="rejectRequest(\''+doc.id+'\',\''+d.name+'\')">✕ Avvis</button>'+
         '</div>'+
       '</div>';
@@ -954,8 +1146,9 @@ function deleteRequest(docId, name){
 }
 
 function loadApprovedUsers(){
-  if(!fbDb)return;
-  fbDb.collection('approved_users').get().then(function(snap){
+  if(!fbDb||!currentTeamId)return;
+  // For superadmin viewing a specific team, filter by teamId
+  fbDb.collection('team_members').where('teamId','==',currentTeamId).get().then(function(snap){
     var list=document.getElementById('admin-users-list');
     if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">👥</div>Ingen aktive brukere</div>';return;}
     var html='';
@@ -988,21 +1181,11 @@ function loadApprovedUsers(){
   });
 }
 
-function changeUserRole(email, name, newRole){
-  var oldRoleLabel = newRole==='admin' ? 'trener' : 'admin';
-  if(!confirm('Endre '+name+' fra '+oldRoleLabel+' til '+newRole+'?')){
-    // Rull tilbake select-visningen
-    loadAdminRequests(); return;
-  }
-  fbDb.collection('approved_users').doc(email).update({role: newRole})
-    .then(function(){
-      // Vis bekreftelse
-      showBanner('generate','success',name+' er nå '+newRole+'.');
-    })
-    .catch(function(e){
-      alert('Feil ved rolleendring: '+e.message);
-      loadAdminRequests();
-    });
+function changeUserRole(memberId, name, newRole){
+  if(!confirm('Endre '+name+' til rollen '+newRole+'?')){loadApprovedUsers();return;}
+  fbDb.collection('team_members').doc(memberId).update({role:newRole})
+    .then(function(){loadApprovedUsers();})
+    .catch(function(e){alert('Feil: '+e.message);loadApprovedUsers();});
 }
 
 function approveRequest(docId, name, email, passwordHint){
@@ -1053,10 +1236,10 @@ function rejectRequest(docId, name){
     .then(function(){ loadAdminRequests(); });
 }
 
-function revokeAccess(email, name){
-  if(!confirm('Fjerne tilgangen til '+name+'?\n\nDe vil ikke kunne logge inn lenger.'))return;
-  fbDb.collection('approved_users').doc(email).delete()
-    .then(function(){ loadAdminRequests(); });
+function revokeAccess(memberId, name){
+  if(!confirm('Fjerne tilgangen til '+name+' for laget "'+currentTeamName+'"?'))return;
+  fbDb.collection('team_members').doc(memberId).delete()
+    .then(function(){loadApprovedUsers();});
 }
 
 function dragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
@@ -1347,14 +1530,14 @@ function approveGroups(){
 
   // Vent på Firestore-bekreftelse før vi viser "lagret"
   if(fbDb){
-    fbDb.collection('app_data').doc('history').set({data: JSON.stringify(appHistory)})
+    teamDataRef('history').set({data: JSON.stringify(appHistory)})
       .then(function(){
         pendingSession=null;
         document.getElementById('result-pending').style.display='none';
         document.getElementById('result-approved').style.display='block';
         btn.disabled=false;btn.textContent='\u2713 Godkjenn og lagre';
         // Også lagre lokalt som backup
-        try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
+        try{localStorage.setItem('fk_history_'+currentTeamId,JSON.stringify(appHistory));}catch(e){}
       })
       .catch(function(e){
         btn.disabled=false;btn.textContent='\u2713 Godkjenn og lagre';
@@ -1365,7 +1548,7 @@ function approveGroups(){
       });
   } else {
     // Lokal testing — lagre i localStorage
-    try{localStorage.setItem('fk_history',JSON.stringify(appHistory));}catch(e){}
+    try{localStorage.setItem('fk_history_'+currentTeamId,JSON.stringify(appHistory));}catch(e){}
     pendingSession=null;
     document.getElementById('result-pending').style.display='none';
     document.getElementById('result-approved').style.display='block';
