@@ -735,33 +735,41 @@ function doRegister(){
   var name=document.getElementById('reg-name').value.trim();
   var email=document.getElementById('reg-email').value.trim();
   var password=document.getElementById('reg-password').value;
+  var teamSel=document.getElementById('reg-team-select')?document.getElementById('reg-team-select').value:'';
+  var teamCustom=document.getElementById('reg-team-custom')?document.getElementById('reg-team-custom').value.trim():'';
   if(!name||!email||!password){showAuthMsg('Fyll inn alle feltene.','error');return;}
   if(password.length<6){showAuthMsg('Passordet m\u00e5 v\u00e6re minst 6 tegn.','error');return;}
+  var teamInfo={id:'ukjent',name:'Ukjent lag'};
+  if(teamSel&&teamSel!=='__custom__'&&teamSel!==''){
+    teamInfo=availableTeams.find(function(t){return t.id===teamSel;})||{id:teamSel,name:teamSel};
+  }else if(teamCustom){
+    teamInfo={id:'__new__',name:teamCustom};
+  }
   var btn=document.querySelector('#auth-register .auth-btn');
   btn.disabled=true;btn.textContent='Sender\u2026';
 
-  // Lagre forespørsel i Firestore — brukeren opprettes IKKE i Auth ennå
-  // Admin må godkjenne manuelt, DERETTER opprettes brukeren
-  fbDb.collection('access_requests').add({
-    name:name,
-    email:email,
-    password_hint: btoa(password), // base64-kodet, kun for å huske til godkjenning
-    requested:new Date().toISOString(),
-    status:'pending'
-  }).then(function(){
-    btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-    showAuthMsg(
-      '\u2705 Foresp\u00f8rselen er sendt til '+ADMIN_EMAIL+'!\n\nDu vil f\u00e5 beskjed n\u00e5r tilgang er godkjent.',
-      'success'
-    );
-    document.getElementById('reg-name').value='';
-    document.getElementById('reg-email').value='';
-    document.getElementById('reg-password').value='';
-  }).catch(function(err){
-    btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-    showAuthMsg('Noe gikk galt. Pr\u00f8v igjen.','error');
-    console.error(err);
-  });
+  // Opprett Auth-bruker, logg ut, lagre foresp\u00f8rsel
+  fbAuth.createUserWithEmailAndPassword(email,password)
+    .then(function(){return fbAuth.signOut();})
+    .then(function(){
+      return fbDb.collection('access_requests').add({
+        name:name,email:email,
+        teamId:teamInfo.id,teamName:teamInfo.name,
+        requested:new Date().toISOString(),status:'pending'
+      });
+    }).then(function(){
+      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+      showAuthMsg('\u2705 Foresp\u00f8rselen er sendt! Du f\u00e5r tilgang n\u00e5r admin godkjenner deg.','success');
+      document.getElementById('reg-name').value='';
+      document.getElementById('reg-email').value='';
+      document.getElementById('reg-password').value='';
+    }).catch(function(err){
+      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+      var msg='Noe gikk galt. Pr\u00f8v igjen.';
+      if(err.code==='auth/email-already-in-use')msg='E-posten er allerede registrert. Foresp\u00f8rselen din er kanskje allerede sendt — pr\u00f8v \u00e5 logge inn, eller kontakt admin.';
+      if(err.code==='auth/invalid-email')msg='Ugyldig e-postadresse.';
+      showAuthMsg(msg,'error');
+    });
 }
 function doSignOut(){
   if(fbAuth)fbAuth.signOut();
@@ -1093,25 +1101,20 @@ function rejectFromCache(docId){
 
 function approveRequest(docId,name,email,teamId,teamName,passwordHint){
   if(!confirm('Godkjenne '+name+' til laget "'+teamName+'"?'))return;
-  var password='';try{password=atob(passwordHint);}catch(e){}
-  if(!password){password=prompt('Skriv inn et midlertidig passord for '+name+':');if(!password)return;}
-  fbAuth.createUserWithEmailAndPassword(email,password)
-    .then(function(){
-      return fbDb.collection('team_members').add({email:email,name:name,teamId:teamId,teamName:teamName,role:'trener',approved:new Date().toISOString()});
-    }).then(function(){
-      return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
-    }).then(function(){
-      return fbAuth.currentUser&&fbAuth.currentUser.email!==currentUserEmail?fbAuth.signOut():Promise.resolve();
-    }).then(function(){
-      alert(name+' er godkjent for "'+teamName+'"!');
-      loadAdminRequests();loadApprovedUsers();loadAllRequests();
-    }).catch(function(err){
-      if(err.code==='auth/email-already-in-use'){
-        fbDb.collection('team_members').add({email:email,name:name,teamId:teamId,teamName:teamName,role:'trener',approved:new Date().toISOString()})
-          .then(function(){return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});})
-          .then(function(){alert(name+' er godkjent!');loadAdminRequests();loadApprovedUsers();loadAllRequests();});
-      }else{alert('Feil: '+err.message);}
-    });
+  // Auth-bruker ble opprettet av brukeren selv ved registrering
+  // Vi legger kun til i team_members for å gi tilgang
+  fbDb.collection('team_members').add({
+    email:email,name:name,teamId:teamId,teamName:teamName,
+    role:'trener',approved:new Date().toISOString()
+  }).then(function(){
+    return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
+  }).then(function(){
+    alert(name+' er godkjent og kan n\u00e5 logge inn p\u00e5 laget "'+teamName+'"!');
+    loadAdminRequests();loadApprovedUsers();
+    if(typeof loadAllRequests==='function')loadAllRequests();
+  }).catch(function(err){
+    alert('Feil: '+err.message);
+  });
 }
 
 function loadAdminRequests(){
@@ -1245,47 +1248,6 @@ function changeUserRole(memberId, name, newRole){
     .catch(function(e){alert('Feil: '+e.message);loadApprovedUsers();});
 }
 
-function approveRequest(docId, name, email, passwordHint){
-  if(!confirm('Godkjenne '+name+' ('+email+')?'))return;
-  var password='';
-  try{ password=atob(passwordHint); }catch(e){}
-  if(!password){
-    password=prompt('Kunne ikke hente passordet automatisk.\nSkriv inn et midlertidig passord for '+name+':');
-    if(!password)return;
-  }
-
-  // Opprett bruker i Firebase Auth
-  fbAuth.createUserWithEmailAndPassword(email, password)
-    .then(function(){
-      // Legg til i approved_users
-      return fbDb.collection('approved_users').doc(email).set({
-        name: name, role: 'trener', approved: new Date().toISOString()
-      });
-    })
-    .then(function(){
-      // Marker forespørsel som godkjent
-      return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
-    })
-    .then(function(){
-      // Logg ut den nye brukeren (vi er logget inn som admin)
-      return fbAuth.currentUser && fbAuth.currentUser.email!==currentUserEmail ? fbAuth.signOut() : Promise.resolve();
-    })
-    .then(function(){
-      showBanner('generate','success',name+' er godkjent og kan nå logge inn!');
-      loadAdminRequests();
-    })
-    .catch(function(err){
-      var msg='Feil: '+err.message;
-      if(err.code==='auth/email-already-in-use'){
-        // Brukeren finnes allerede i Auth — bare godkjenn i Firestore
-        fbDb.collection('approved_users').doc(email).set({name:name,role:'trener',approved:new Date().toISOString()})
-          .then(function(){ return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'}); })
-          .then(function(){ loadAdminRequests(); });
-        return;
-      }
-      alert(msg);
-    });
-}
 
 function rejectRequest(docId, name){
   if(!confirm('Avvise forespørselen fra '+name+'?'))return;
