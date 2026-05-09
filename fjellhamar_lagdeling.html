@@ -492,9 +492,19 @@
 
 <!-- ADMIN -->
 <div id="page-admin" class="page">
-  <!-- SUPERADMIN: Lag-administrasjon -->
+
+  <!-- SUPERADMIN-SEKSJON — tydelig markert -->
   <div id="admin-superadmin-section" style="display:none;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="background:var(--slate);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1.25rem;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="font-size:18px;">👑</span>
+        <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--gold);">Superadmin</span>
+      </div>
+      <p style="font-size:12px;color:rgba(255,255,255,.6);">Administrer alle lag, brukere og forespørsler på tvers av hele systemet.</p>
+    </div>
+
+    <!-- Lag i systemet -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <div class="section-divider" style="margin:0;">Lag i systemet</div>
       <button class="btn btn-primary btn-sm" onclick="showCreateTeamForm()">+ Nytt lag</button>
     </div>
@@ -512,47 +522,58 @@
         <button class="btn btn-sm" onclick="document.getElementById('create-team-form').style.display='none'">Avbryt</button>
       </div>
     </div>
-    <div id="admin-teams-list"><div class="empty"><div class="empty-icon">⚽</div>Klikk "Lag i systemet" for å laste</div></div>
-    <div class="section-divider" style="margin-top:1.5rem;">Alle tilgangsforespørsler (alle lag)</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <button class="btn btn-sm" onclick="loadAllRequests()">🔄 Last alle forespørsler</button>
+    <div id="admin-teams-list"><div class="empty"><div class="empty-icon">⚽</div>Laster lag...</div></div>
+
+    <!-- Alle forespørsler på tvers av lag -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:1.25rem 0 10px;flex-wrap:wrap;gap:8px;">
+      <div class="section-divider" style="margin:0;">Alle tilgangsforespørsler</div>
+      <button class="btn btn-sm" onclick="loadAllRequests()">🔄 Oppdater</button>
     </div>
-    <div id="admin-all-requests-list"><div class="empty"><div class="empty-icon">📋</div>Klikk Last for å se</div></div>
-    <div style="height:1px;background:var(--border);margin:1.5rem 0;"></div>
+    <div id="admin-all-requests-list"><div class="empty"><div class="empty-icon">📋</div>Laster...</div></div>
+
+    <!-- Alle aktive brukere på tvers av lag -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:1.25rem 0 10px;flex-wrap:wrap;gap:8px;">
+      <div class="section-divider" style="margin:0;">Alle aktive brukere</div>
+      <button class="btn btn-sm" onclick="loadAllUsers()">🔄 Oppdater</button>
+    </div>
+    <div id="admin-all-users-list"><div class="empty"><div class="empty-icon">👥</div>Laster...</div></div>
+
+    <div style="height:2px;background:linear-gradient(to right,var(--gold),transparent);margin:1.5rem 0;border-radius:99px;"></div>
   </div>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-    <div class="section-divider" style="margin:0;">Tilgangsforespørsler — <span id="admin-team-label">dette laget</span></div>
+  <!-- LAGADMIN-SEKSJON -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">
+    <span style="font-size:16px;">⚙️</span>
+    <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--slate);">Administrer: <span id="admin-team-label" style="color:var(--green);">dette laget</span></span>
+  </div>
+
+  <!-- Tilgangsforespørsler -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+    <div class="section-divider" style="margin:0;">Tilgangsforespørsler</div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-sm" onclick="loadAdminRequests()">🔄 Oppdater</button>
       <button class="btn btn-sm" id="btn-show-history-requests" onclick="loadRequestHistory()">🕐 Vis historikk</button>
     </div>
   </div>
-  <div style="font-size:12px;color:var(--slate-light);margin-bottom:14px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Her ser du alle som har bedt om tilgang. Godkjenn ved å klikke <strong>Godkjenn</strong> — brukeren opprettes da i Firebase og kan logge inn. Avvis sletter forespørselen.
-  </div>
   <div id="admin-requests-list">
-    <div class="empty"><div class="empty-icon">📋</div>Ingen forespørsler ennå</div>
+    <div class="empty"><div class="empty-icon">✅</div>Ingen ventende forespørsler</div>
   </div>
 
-  <div class="section-divider" style="margin-top:1.5rem;">Aktive brukere</div>
-  <div style="font-size:12px;color:var(--slate-light);margin-bottom:14px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Alle som har tilgang til appen. Endre rolle eller fjern tilgang direkte her.
-  </div>
+  <!-- Aktive brukere for dette laget -->
+  <div class="section-divider" style="margin-top:1.5rem;">Aktive brukere — <span id="admin-users-team-label" style="color:var(--green);"></span></div>
   <div id="admin-users-list">
     <div class="empty"><div class="empty-icon">👥</div>Laster...</div>
   </div>
 
+  <!-- Grupperingshistorikk -->
   <div class="section-divider" style="margin-top:1.5rem;">Grupperingshistorikk</div>
-  <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Historikken brukes for å sikre variasjon i gruppesammensetningen over tid. Sletting nullstiller dette for alle økttyper.
+  <div style="font-size:12px;color:var(--slate-light);margin-bottom:10px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
+    Sletting nullstiller variasjonslogikken for alle økttyper på dette laget.
   </div>
   <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑️ Slett all historikk</button>
 
-  <div class="section-divider" style="margin-top:1.5rem;">Endringslogg — spilleroversikt</div>
-  <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);">
-    Viser alle endringer i spilleroversikten — hvem som endret hva og når.
-  </div>
+  <!-- Endringslogg -->
+  <div class="section-divider" style="margin-top:1.5rem;">Endringslogg</div>
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
     <button class="btn btn-sm" onclick="loadAdminLog()">🔄 Last logg</button>
     <button class="btn btn-sm btn-danger" onclick="clearAllLog()">🗑️ Slett hele loggen</button>
@@ -1001,7 +1022,8 @@ function loadAdminPage(){
   var isSA=currentUserRole==='superadmin';
   document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
   document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
-  if(isSA){loadTeamsList();loadAllRequests();}
+  document.getElementById('admin-users-team-label').textContent=currentTeamName||'';
+  if(isSA){loadTeamsList();loadAllRequests();loadAllUsers();}
   loadAdminRequests();loadApprovedUsers();
 }
 
@@ -1207,44 +1229,100 @@ function deleteRequest(docId, name){
 
 function loadApprovedUsers(){
   if(!fbDb||!currentTeamId)return;
-  // For superadmin viewing a specific team, filter by teamId
+  var list=document.getElementById('admin-users-list');
+  // Oppdater lag-label
+  var lbl=document.getElementById('admin-users-team-label');
+  if(lbl)lbl.textContent=currentTeamName||'';
   fbDb.collection('team_members').where('teamId','==',currentTeamId).get().then(function(snap){
-    var list=document.getElementById('admin-users-list');
-    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">👥</div>Ingen aktive brukere</div>';return;}
+    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>Ingen aktive brukere for dette laget</div>';return;}
     var html='';
     snap.forEach(function(doc){
       var d=doc.data();
-      var isMe=doc.id===currentUserEmail;
+      var isMe=d.email===currentUserEmail;
       var role=d.role||'trener';
-      var safeEmail=doc.id.replace(/'/g,"\\'");
-      var safeName=(d.name||'').replace(/'/g,"\\'");
+      var safeDid=doc.id.replace(/'/g,"\\'");
+      var displayName=d.name||d.email||'Ukjent';
+      var safeName=displayName.replace(/'/g,"\\'");
       html+='<div class="user-card">'+
-        '<div>'+
-          '<div style="font-weight:600;font-size:14px;">'+d.name+'</div>'+
-          '<div style="font-size:12px;color:var(--slate-light);">'+doc.id+'</div>'+
+        '<div style="flex:1;">'+
+          '<div style="font-weight:600;font-size:14px;">'+displayName+'</div>'+
+          '<div style="font-size:12px;color:var(--slate-light);">'+d.email+'</div>'+
+          '<div style="font-size:11px;color:var(--gold);margin-top:2px;">\u26BD '+(d.teamName||currentTeamName)+'</div>'+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;">'+
-          (!isMe
-            ? '<select onchange="changeUserRole(\''+safeEmail+'\',\''+safeName+'\',this.value)" '+
-              'style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;cursor:pointer;">'+
-              '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
-              '<option value="admin"'+(role==='admin'?' selected':'')+'>Admin</option>'+
-              '</select>'+
-              '<button class="btn btn-danger btn-sm" onclick="revokeAccess(\''+safeEmail+'\',\''+safeName+'\')">Fjern</button>'
-            : '<span class="user-role user-role-'+role+'">'+role+'</span>'+
-              '<span style="font-size:11px;color:var(--slate-light);">deg selv</span>'
-          )+
-        '</div>'+
-      '</div>';
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'+
+        (!isMe?
+          '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;">'+
+            '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
+            '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
+          '</select>'+
+          '<button class="btn btn-danger btn-sm" onclick="revokeAccess(\''+safeDid+'\',\''+safeName+'\')">Fjern</button>':
+          '<span class="user-role user-role-'+role+'">'+role+'</span><span style="font-size:11px;color:var(--slate-light);">deg selv</span>'
+        )+
+        '</div></div>';
     });
     list.innerHTML=html;
-  });
+  }).catch(function(e){list.innerHTML='<div class="empty">Feil: '+e.message+'</div>';});
+}
+
+function loadAllUsers(){
+  var list=document.getElementById('admin-all-users-list');
+  if(!list||!fbDb)return;
+  fbDb.collection('team_members').get().then(function(snap){
+    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>Ingen brukere registrert</div>';return;}
+    var byTeam={};
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var tid=d.teamId||'ukjent';var tname=d.teamName||tid;
+      if(!byTeam[tid])byTeam[tid]={name:tname,members:[]};
+      byTeam[tid].members.push({docId:doc.id,data:d});
+    });
+    var html='';
+    Object.keys(byTeam).sort().forEach(function(tid){
+      var team=byTeam[tid];
+      html+='<div style="margin-bottom:14px;">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:12px;color:var(--green);padding:5px 12px;background:var(--green-pale);border-radius:var(--radius-sm);margin-bottom:6px;">\u26BD '+team.name+' ('+team.members.length+')</div>';
+      team.members.forEach(function(m){
+        var d=m.data;var role=d.role||'trener';
+        var displayName=d.name||d.email||'Ukjent';
+        var isMe=d.email===currentUserEmail;
+        var safeDid=m.docId.replace(/'/g,"\\'");
+        var safeName=displayName.replace(/'/g,"\\'");
+        html+='<div class="user-card" style="margin-bottom:4px;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-weight:600;font-size:13px;">'+displayName+'</div>'+
+            '<div style="font-size:12px;color:var(--slate-light);">'+d.email+'</div>'+
+          '</div>'+
+          (!isMe?
+            '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" '+
+              'style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
+              '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
+              '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
+            '</select>'+
+            '<button class="btn btn-danger btn-sm" onclick="revokeAccessGlobal(\''+safeDid+'\',\''+safeName+'\',\''+team.name.replace(/'/g,"\\'")+'\')">Fjern</button>':
+            '<span class="user-role user-role-'+role+'">'+role+'</span>'+
+            '<span style="font-size:11px;color:var(--slate-light);margin-left:6px;">deg selv</span>'
+          )+
+        '</div>';
+      });
+      html+='</div>';
+    });
+    list.innerHTML=html;
+  }).catch(function(e){list.innerHTML='<div class="empty">Feil: '+e.message+'</div>';});
+}
+
+function revokeAccessGlobal(memberId, name, teamName){
+  if(!confirm('Fjerne '+name+' fra laget "'+teamName+'"?'))return;
+  fbDb.collection('team_members').doc(memberId).delete()
+    .then(function(){loadAllUsers();loadApprovedUsers();});
 }
 
 function changeUserRole(memberId, name, newRole){
   if(!confirm('Endre '+name+' til rollen '+newRole+'?')){loadApprovedUsers();return;}
   fbDb.collection('team_members').doc(memberId).update({role:newRole})
-    .then(function(){loadApprovedUsers();})
+    .then(function(){
+      loadApprovedUsers();
+      if(currentUserRole==='superadmin')loadAllUsers();
+    })
     .catch(function(e){alert('Feil: '+e.message);loadApprovedUsers();});
 }
 
