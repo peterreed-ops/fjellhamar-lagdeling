@@ -1035,6 +1035,9 @@ function loadTeamsList(){
 function switchActiveTeam(btn){
   var id=btn.getAttribute('data-id');var name=btn.getAttribute('data-name');
   currentTeamId=id;currentTeamName=name;
+  // Nullstill alt lag-spesifikt — inkludert oppmøte
+  allPlayers=[];appHistory=[];
+  attendingNames=[];attendingPlayers=[];
   document.getElementById('header-team-name').textContent=name;
   document.getElementById('admin-team-label').textContent=name;
   allPlayers=[];appHistory=[];attendingPlayers=[];attendingNames=[];
@@ -1054,14 +1057,16 @@ function deleteTeam(btn){
 }
 function loadAllRequests(){
   var list=document.getElementById('admin-all-requests-list');if(!list)return;
-  fbDb.collection('access_requests').where('status','==','pending').orderBy('requested','desc').get().then(function(snap){
-    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Ingen ventende foresp\u00f8rsler</div>';return;}
-    var html='';
+  fbDb.collection('access_requests').get().then(function(snap){
     window._pendingRequests=window._pendingRequests||{};
-    snap.forEach(function(doc){
+    var pending=[];
+    snap.forEach(function(doc){var d=doc.data();if(d.status==='pending'){pending.push(doc);window._pendingRequests[doc.id]=d;}});
+    pending.sort(function(a,b){return(b.data().requested||'').localeCompare(a.data().requested||'');});
+    if(!pending.length){list.innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Ingen ventende foresp\u00f8rsler</div>';return;}
+    var html='';
+    pending.forEach(function(doc){
       var d=doc.data();
       var dato=new Date(d.requested).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-      var ph=d.passwordHint||d.password_hint||'';
       html+='<div class="request-card">'+
         '<div class="request-info"><div class="request-name">'+d.name+'</div><div class="request-email">'+d.email+'</div>'+
         '<div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:2px;">\u26BD '+(d.teamName||'Ukjent lag')+'</div>'+
@@ -1076,6 +1081,16 @@ function loadAllRequests(){
 }
 
 // ── APPROVE/REJECT ────────────────────────────────────────────
+function approveFromCache(docId){
+  var d=window._pendingRequests&&window._pendingRequests[docId];
+  if(!d){alert('Fant ikke foresp\u00f8rselen. Last siden p\u00e5 nytt.');return;}
+  approveRequest(docId,d.name,d.email,d.teamId||currentTeamId,d.teamName||currentTeamName,d.passwordHint||d.password_hint||'');
+}
+function rejectFromCache(docId){
+  var d=window._pendingRequests&&window._pendingRequests[docId];
+  rejectRequest(docId,d?d.name:'ukjent');
+}
+
 function approveRequest(docId,name,email,teamId,teamName,passwordHint){
   if(!confirm('Godkjenne '+name+' til laget "'+teamName+'"?'))return;
   var password='';try{password=atob(passwordHint);}catch(e){}
@@ -1102,10 +1117,19 @@ function approveRequest(docId,name,email,teamId,teamName,passwordHint){
 function loadAdminRequests(){
   if(!fbDb||!currentTeamId)return;
   document.getElementById('btn-show-history-requests').textContent='\uD83D\uDD50 Vis historikk';
-  fbDb.collection('access_requests').orderBy('requested','desc').get().then(function(snap){
+  window._pendingRequests=window._pendingRequests||{};
+  fbDb.collection('access_requests').get().then(function(snap){
     var list=document.getElementById('admin-requests-list');
     var pending=[];
-    snap.forEach(function(doc){ if(doc.data().status==='pending') pending.push(doc); });
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var teamMatch=currentUserRole==='superadmin'||(d.teamId===currentTeamId)||!d.teamId;
+      if(d.status==='pending'&&teamMatch){
+        pending.push(doc);
+        window._pendingRequests[doc.id]=d;
+      }
+    });
+    pending.sort(function(a,b){return(b.data().requested||'').localeCompare(a.data().requested||'');});
     if(pending.length===0){
       list.innerHTML='<div class="empty"><div class="empty-icon">\u2705</div>Ingen ventende foresp\u00f8rsler</div>';
       return;
@@ -1118,10 +1142,11 @@ function loadAdminRequests(){
         '<div class="request-info">'+
           '<div class="request-name">'+d.name+'</div>'+
           '<div class="request-email">'+d.email+'</div>'+
+          (d.teamName?'<div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:2px;">\u26BD '+d.teamName+'</div>':'')+
           '<div class="request-date">'+dato+'</div>'+
         '</div>'+
         '<div class="request-actions">'+
-        '<button class="btn btn-approve" onclick="approveFromCache(\''+doc.id+'\')">\u2713 Godkjenn</button>'+
+          '<button class="btn btn-approve" onclick="approveFromCache(\''+doc.id+'\')">\u2713 Godkjenn</button>'+
           '<button class="btn btn-reject" onclick="rejectRequest(\''+doc.id+'\',\''+d.name+'\')">✕ Avvis</button>'+
         '</div>'+
       '</div>';
