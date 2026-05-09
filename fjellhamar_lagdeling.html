@@ -647,37 +647,68 @@ function skipAuthForTesting(){
 }
 function checkUserApproved(user){
   currentUserEmail=user.email;
-  fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
-    if(doc.exists){
-      document.getElementById('auth-user-name').textContent=doc.data().name||user.email;
-      document.getElementById('auth-user-bar').style.display='flex';
-      // Vis admin-fane kun for admin, logg for alle
-      if(doc.data().role==='admin'||user.email===ADMIN_EMAIL){
-        document.getElementById('tab-admin').style.display='block';
+  // Superadmin — full tilgang uten å sjekke Firestore
+  if(user.email===SUPERADMIN_EMAIL){
+    currentUserRole='superadmin';
+    currentTeamId='g2016';currentTeamName='Gutter 2016';
+    userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:'superadmin'}];
+    onUserAccessGranted('Peter Reed','superadmin');
+    return;
+  }
+  // Sjekk team_members først
+  fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
+    if(!snap.empty){
+      userTeams=[];
+      snap.forEach(function(doc){userTeams.push(Object.assign({docId:doc.id},doc.data()));});
+      if(userTeams.length===1){
+        var t=userTeams[0];
+        currentTeamId=t.teamId;currentTeamName=t.teamName;currentUserRole=t.role||'trener';
+        onUserAccessGranted(t.name||user.email,currentUserRole);
+      }else{
+        showTeamSelectorModal(userTeams,user.email);
       }
-      showAuthOverlay(false);
-      loadFromFirestore(function(){
-        var today=new Date().toISOString().split('T')[0];
-        document.getElementById('session-date').value=today;
-        if(allPlayers.length){
-          document.getElementById('levels-done').textContent='\u2713 '+allPlayers.length+' spillere lastet';
-          document.getElementById('levels-done').style.display='block';
-          document.getElementById('levels-saved-row').style.display='flex';
-          updateSetupSummary();
-        }
-      });
-    } else {
-      fbAuth.signOut().then(function(){
-        showAuthOverlay(true);
-        switchAuthTab('login');
-        showAuthMsg('\u26D4 Din konto er ikke godkjent enn\u00e5.\n\n'+ADMIN_EMAIL+' m\u00e5 godkjenne deg f\u00f8r du kan logge inn.','pending');
-      });
+      return;
     }
+    // Bakoverkompatibilitet: sjekk approved_users
+    fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
+      if(doc.exists){
+        var role=doc.data().role||'trener';
+        currentTeamId='g2016';currentTeamName='Gutter 2016';currentUserRole=role;
+        userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:role}];
+        onUserAccessGranted(doc.data().name||user.email,role);
+      }else{
+        fbAuth.signOut().then(function(){
+          showAuthOverlay(true);switchAuthTab('login');
+          showAuthMsg('\u26D4 Din konto er ikke godkjent enn\u00e5. Ta kontakt med admin.','pending');
+        });
+      }
+    });
   }).catch(function(e){
     console.warn('checkUserApproved feil:',e);
-    fbAuth.signOut();
-    showAuthOverlay(true);
+    fbAuth.signOut();showAuthOverlay(true);
     showAuthMsg('Kunne ikke verifisere tilgang. Pr\u00f8v igjen.','error');
+  });
+}
+
+function onUserAccessGranted(name,role){
+  document.getElementById('auth-user-name').textContent=name;
+  document.getElementById('auth-user-bar').style.display='flex';
+  document.getElementById('header-team-name').textContent=currentTeamName||'Fjellhamar FK';
+  if(role==='admin'||role==='lagadmin'||role==='superadmin'){
+    document.getElementById('tab-admin').style.display='block';
+  }
+  if(userTeams.length>1){
+    document.getElementById('team-switch-btn').style.display='inline-block';
+  }
+  showAuthOverlay(false);
+  loadFromFirestore(function(){
+    document.getElementById('session-date').value=new Date().toISOString().split('T')[0];
+    if(allPlayers.length){
+      document.getElementById('levels-done').textContent='\u2713 '+allPlayers.length+' spillere lastet';
+      document.getElementById('levels-done').style.display='block';
+      document.getElementById('levels-saved-row').style.display='flex';
+      updateSetupSummary();
+    }
   });
 }
 function showAuthOverlay(show){document.getElementById('auth-overlay').style.display=show?'flex':'none';}
