@@ -534,7 +534,37 @@
     <!-- Alle aktive brukere på tvers av lag -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin:1.25rem 0 10px;flex-wrap:wrap;gap:8px;">
       <div class="section-divider" style="margin:0;">Alle aktive brukere</div>
-      <button class="btn btn-sm" onclick="loadAllUsers()">🔄 Oppdater</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="showGrantAccessForm()">+ Gi tilgang til lag</button>
+        <button class="btn btn-sm" onclick="loadAllUsers()">🔄 Oppdater</button>
+      </div>
+    </div>
+    <div id="grant-access-form" style="display:none;" class="card">
+      <div class="card-title">Gi eksisterende bruker tilgang til lag</div>
+      <div class="auth-field">
+        <label>Velg bruker</label>
+        <select id="grant-user-select" style="width:100%;">
+          <option value="">-- Laster brukere... --</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label>Velg lag</label>
+        <select id="grant-team-select" style="width:100%;">
+          <option value="">-- Velg lag --</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label>Rolle på dette laget</label>
+        <select id="grant-role-select" style="width:100%;">
+          <option value="trener">Trener</option>
+          <option value="lagadmin">Lagadmin</option>
+        </select>
+      </div>
+      <div id="grant-access-msg" style="display:none;font-size:13px;padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="grantAccessToTeam()">Gi tilgang</button>
+        <button class="btn btn-sm" onclick="document.getElementById('grant-access-form').style.display='none'">Avbryt</button>
+      </div>
     </div>
     <div id="admin-all-users-list"><div class="empty"><div class="empty-icon">👥</div>Laster...</div></div>
 
@@ -1308,6 +1338,71 @@ function loadAllUsers(){
     });
     list.innerHTML=html;
   }).catch(function(e){list.innerHTML='<div class="empty">Feil: '+e.message+'</div>';});
+}
+
+function showGrantAccessForm(){
+  var form=document.getElementById('grant-access-form');
+  form.style.display='block';
+  document.getElementById('grant-access-msg').style.display='none';
+
+  // Fyll lag-dropdown fra availableTeams
+  var teamSel=document.getElementById('grant-team-select');
+  teamSel.innerHTML='<option value="">-- Velg lag --</option>';
+  availableTeams.forEach(function(t){
+    teamSel.innerHTML+='<option value="'+t.id+'" data-name="'+t.name+'">'+t.name+'</option>';
+  });
+
+  // Fyll bruker-dropdown fra team_members (unike e-poster)
+  fbDb.collection('team_members').get().then(function(snap){
+    var seen={};var users=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      if(!seen[d.email]){seen[d.email]=true;users.push({email:d.email,name:d.name||d.email});}
+    });
+    users.sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
+    var userSel=document.getElementById('grant-user-select');
+    userSel.innerHTML='<option value="">-- Velg bruker --</option>';
+    users.forEach(function(u){
+      userSel.innerHTML+='<option value="'+u.email+'" data-name="'+u.name+'">'+u.name+' ('+u.email+')</option>';
+    });
+  });
+}
+
+function grantAccessToTeam(){
+  var userSel=document.getElementById('grant-user-select');
+  var teamSel=document.getElementById('grant-team-select');
+  var role=document.getElementById('grant-role-select').value;
+  var email=userSel.value;
+  var userName=userSel.options[userSel.selectedIndex]?userSel.options[userSel.selectedIndex].getAttribute('data-name'):'';
+  var teamId=teamSel.value;
+  var teamName=teamSel.options[teamSel.selectedIndex]?teamSel.options[teamSel.selectedIndex].getAttribute('data-name'):'';
+
+  if(!email||!teamId){showGrantMsg('Velg bruker og lag.','error');return;}
+
+  // Sjekk om brukeren allerede har tilgang til dette laget
+  fbDb.collection('team_members').where('email','==',email).where('teamId','==',teamId).get().then(function(snap){
+    if(!snap.empty){
+      showGrantMsg(userName+' har allerede tilgang til "'+teamName+'".','warn');
+      return;
+    }
+    return fbDb.collection('team_members').add({
+      email:email,name:userName,teamId:teamId,teamName:teamName,
+      role:role,approved:new Date().toISOString()
+    }).then(function(){
+      showGrantMsg('\u2705 '+userName+' har nå tilgang til "'+teamName+'" som '+role+'!','success');
+      loadAllUsers();
+    });
+  }).catch(function(e){showGrantMsg('Feil: '+e.message,'error');});
+}
+
+function showGrantMsg(msg,type){
+  var el=document.getElementById('grant-access-msg');
+  el.textContent=msg;
+  el.style.display='block';
+  var colors={success:'var(--green-pale)',error:'#fdf2f2',warn:'var(--gold-pale)'};
+  var borders={success:'var(--green-light)',error:'#f5c6c2',warn:'var(--gold)'};
+  var text={success:'var(--green)',error:'var(--danger)',warn:'#8a5a00'};
+  el.style.background=colors[type];el.style.border='1px solid '+borders[type];el.style.color=text[type];
 }
 
 function revokeAccessGlobal(memberId, name, teamName){
