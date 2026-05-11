@@ -470,8 +470,11 @@
         <button class="btn btn-danger" onclick="showPage('generate')">✕ Avbryt</button>
       </div>
     </div>
-    <div id="result-approved" style="display:none;background:var(--green-pale);border:1px solid var(--green-light);border-radius:var(--radius-sm);padding:10px 16px;margin-bottom:12px;">
-      <span style="font-size:13px;font-weight:600;color:var(--green);">✓ Godkjent og lagret i historikken</span>
+    <div id="result-approved" style="display:none;background:var(--green-pale);border:1px solid var(--green-light);border-radius:var(--radius-sm);padding:10px 16px;margin-bottom:12px;display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:13px;font-weight:600;color:var(--green);">✓ Godkjent og lagret i historikken</span>
+        <button class="btn btn-sm btn-gold" onclick="openShareModalFromResult()">📤 Del grupper</button>
+      </div>
     </div>
     <div id="groups-output"></div>
     <div class="export-row">
@@ -1929,6 +1932,13 @@ function toggleHistory(i){
 }
 function clearHistory(){if(!confirm('Slette all historikk?'))return;appHistory=[];saveHistory();renderHistory();}
 function deleteSession(e,i){e.stopPropagation();if(!confirm('Slette denne \u00f8kten?'))return;appHistory.splice(i,1);saveHistory();renderHistory();}
+
+function openShareModalFromResult(){
+  if(!sessionGroups)return;
+  shareSession=sessionGroups;
+  renderShareCard(shareSession);
+  document.getElementById('share-modal').classList.add('open');
+}
 
 function openShareModal(e,idx){
   e.stopPropagation();shareSession=appHistory[idx];
