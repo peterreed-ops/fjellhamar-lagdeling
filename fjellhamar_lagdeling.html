@@ -245,20 +245,22 @@
 
       <!-- REGISTER -->
       <div id="auth-register" style="display:none;">
-        <div class="auth-field"><label>Navn</label><input type="text" id="reg-name" placeholder="Fullt navn" /></div>
-        <div class="auth-field"><label>E-post</label><input type="email" id="reg-email" placeholder="din@epost.no" /></div>
-        <div class="auth-field"><label>Ønsket passord (min. 6 tegn)</label><input type="password" id="reg-password" placeholder="••••••••" /></div>
-        <div class="auth-field">
-          <label>Hvilket lag ønsker du tilgang til?</label>
+        <div class="auth-field"><label>Fullt navn</label><input type="text" id="reg-name" placeholder="Ola Nordmann"/></div>
+        <div class="auth-field"><label>E-postadresse</label><input type="email" id="reg-email" placeholder="din@epost.no"/></div>
+        <div class="auth-field"><label>Velg passord (minst 6 tegn)</label><input type="password" id="reg-password" placeholder="••••••••"/></div>
+        <div class="auth-field" id="reg-team-select-wrap">
+          <label>Hvilket lag vil du ha tilgang til?</label>
           <select id="reg-team-select" style="width:100%;" onchange="regTeamSelectChange()">
             <option value="">-- Laster lag... --</option>
           </select>
         </div>
         <div class="auth-field" id="reg-team-custom-wrap" style="display:none;">
-          <label>Beskriv laget (f.eks. "Gutter 2015")</label>
-          <input type="text" id="reg-team-custom" placeholder="Gutter 2015 / Jenter 2017" />
+          <label>Beskriv laget ditt</label>
+          <input type="text" id="reg-team-custom" placeholder="F.eks. Gutter 2015 eller Jenter 2017"/>
+          <div style="font-size:11px;color:var(--slate-light);margin-top:4px;">Superadmin vil opprette laget og gi deg tilgang.</div>
         </div>
         <button class="auth-btn" onclick="doRegister()">Send forespørsel</button>
+        <div style="font-size:12px;color:var(--slate-light);text-align:center;margin-top:10px;line-height:1.5;">Du vil få tilgang så snart admin godkjenner forespørselen din.</div>
       </div>
 
       <div class="auth-msg" id="auth-msg"></div>
@@ -671,12 +673,32 @@ function loadAvailableTeams(){
   fbDb.collection('teams').orderBy('name').get().then(function(snap){
     availableTeams=[];
     snap.forEach(function(doc){availableTeams.push(Object.assign({id:doc.id},doc.data()));});
-    var sel=document.getElementById('reg-team-select');
-    if(!sel)return;
-    sel.innerHTML='<option value="">-- Velg lag --</option>';
-    availableTeams.forEach(function(t){sel.innerHTML+='<option value="'+t.id+'">'+t.name+'</option>';});
-    sel.innerHTML+='<option value="__custom__">Annet / Nytt lag (beskriv)</option>';
-  }).catch(function(){});
+    populateTeamSelect();
+  }).catch(function(e){
+    // Ingen tilgang til teams-collection uten innlogging — vis kun fritekst-valg
+    console.warn('loadAvailableTeams:', e.message);
+    availableTeams=[];
+    populateTeamSelect();
+  });
+}
+
+function populateTeamSelect(){
+  var sel=document.getElementById('reg-team-select');
+  if(!sel)return;
+  if(availableTeams.length>0){
+    sel.innerHTML='<option value="">-- Velg ditt lag --</option>';
+    availableTeams.forEach(function(t){
+      sel.innerHTML+='<option value="'+t.id+'">'+t.name+'</option>';
+    });
+    sel.innerHTML+='<option value="__custom__">Finner ikke mitt lag (beskriv nedenfor)</option>';
+    document.getElementById('reg-team-select-wrap').style.display='block';
+  } else {
+    // Ingen lag lastet — vis kun fritekst
+    sel.innerHTML='<option value="__custom__">Skriv inn ditt lag nedenfor</option>';
+    sel.value='__custom__';
+    document.getElementById('reg-team-select-wrap').style.display='none';
+    document.getElementById('reg-team-custom-wrap').style.display='block';
+  }
 }
 
 function regTeamSelectChange(){
@@ -734,14 +756,14 @@ function checkUserApproved(user){
       }else{
         fbAuth.signOut().then(function(){
           showAuthOverlay(true);switchAuthTab('login');
-          showAuthMsg('\u26D4 Din konto er ikke godkjent enn\u00e5. Ta kontakt med admin.','pending');
+          showAuthMsg('\u23F3 Foresp\u00f8rselen din er ikke godkjent enn\u00e5.\n\nAdmin m\u00e5 godkjenne deg f\u00f8r du kan logge inn. Pr\u00f8v igjen etter at du har mottatt beskjed.','pending');
         });
       }
     });
   }).catch(function(e){
     console.warn('checkUserApproved feil:',e);
     fbAuth.signOut();showAuthOverlay(true);
-    showAuthMsg('Kunne ikke verifisere tilgang. Pr\u00f8v igjen.','error');
+    showAuthMsg('Kunne ikke verifisere tilgang. Sjekk internettforbindelsen og pr\u00f8v igjen.','error');
   });
 }
 
@@ -789,39 +811,63 @@ function doRegister(){
   var name=document.getElementById('reg-name').value.trim();
   var email=document.getElementById('reg-email').value.trim();
   var password=document.getElementById('reg-password').value;
-  var teamSel=document.getElementById('reg-team-select')?document.getElementById('reg-team-select').value:'';
-  var teamCustom=document.getElementById('reg-team-custom')?document.getElementById('reg-team-custom').value.trim():'';
-  if(!name||!email||!password){showAuthMsg('Fyll inn alle feltene.','error');return;}
-  if(password.length<6){showAuthMsg('Passordet m\u00e5 v\u00e6re minst 6 tegn.','error');return;}
-  var teamInfo={id:'ukjent',name:'Ukjent lag'};
-  if(teamSel&&teamSel!=='__custom__'&&teamSel!==''){
-    teamInfo=availableTeams.find(function(t){return t.id===teamSel;})||{id:teamSel,name:teamSel};
-  }else if(teamCustom){
-    teamInfo={id:'__new__',name:teamCustom};
-  }
-  var btn=document.querySelector('#auth-register .auth-btn');
-  btn.disabled=true;btn.textContent='Sender\u2026';
+  var teamSel=document.getElementById('reg-team-select').value;
+  var teamCustom=document.getElementById('reg-team-custom').value.trim();
 
-  // Opprett Auth-bruker, logg ut, lagre foresp\u00f8rsel
+  // Validering
+  if(!name){showAuthMsg('Fyll inn ditt fulle navn.','error');return;}
+  if(!email){showAuthMsg('Fyll inn e-postadresse.','error');return;}
+  if(!password||password.length<6){showAuthMsg('Passordet m\u00e5 v\u00e6re minst 6 tegn.','error');return;}
+
+  // Lag
+  var teamInfo=null;
+  if(teamSel&&teamSel!==''&&teamSel!=='__custom__'){
+    teamInfo=availableTeams.find(function(t){return t.id===teamSel;})||{id:teamSel,name:teamSel};
+  } else if(teamCustom){
+    teamInfo={id:'__new__',name:teamCustom};
+  } else {
+    showAuthMsg('Velg et lag fra listen, eller beskriv laget ditt.','error');return;
+  }
+
+  var btn=document.querySelector('#auth-register .auth-btn');
+  btn.disabled=true;btn.textContent='Oppretter konto\u2026';
+
   fbAuth.createUserWithEmailAndPassword(email,password)
-    .then(function(){return fbAuth.signOut();})
+    .then(function(){
+      btn.textContent='Lagrer foresp\u00f8rsel\u2026';
+      return fbAuth.signOut();
+    })
     .then(function(){
       return fbDb.collection('access_requests').add({
         name:name,email:email,
         teamId:teamInfo.id,teamName:teamInfo.name,
         requested:new Date().toISOString(),status:'pending'
       });
-    }).then(function(){
+    })
+    .then(function(){
       btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-      showAuthMsg('\u2705 Foresp\u00f8rselen er sendt! Du f\u00e5r tilgang n\u00e5r admin godkjenner deg.','success');
+      showAuthMsg(
+        '\u2705 Foresp\u00f8rselen er sendt!\n\nAdmin vil godkjenne deg. Du f\u00e5r da logge inn med e-post: '+email,
+        'success'
+      );
       document.getElementById('reg-name').value='';
       document.getElementById('reg-email').value='';
       document.getElementById('reg-password').value='';
-    }).catch(function(err){
+      document.getElementById('reg-team-select').value='';
+      document.getElementById('reg-team-custom').value='';
+      document.getElementById('reg-team-custom-wrap').style.display='none';
+    })
+    .catch(function(err){
       btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
       var msg='Noe gikk galt. Pr\u00f8v igjen.';
-      if(err.code==='auth/email-already-in-use')msg='E-posten er allerede registrert. Foresp\u00f8rselen din er kanskje allerede sendt — pr\u00f8v \u00e5 logge inn, eller kontakt admin.';
-      if(err.code==='auth/invalid-email')msg='Ugyldig e-postadresse.';
+      if(err.code==='auth/email-already-in-use')
+        msg='Det finnes allerede en konto med denne e-posten. Har du allerede sendt foresp\u00f8rsel? Pr\u00f8v \u00e5 logge inn, eller kontakt admin.';
+      else if(err.code==='auth/invalid-email')
+        msg='Ugyldig e-postadresse. Sjekk at du har skrevet riktig.';
+      else if(err.code==='auth/weak-password')
+        msg='Passordet er for svakt. Bruk minst 6 tegn.';
+      else if(err.code==='auth/network-request-failed')
+        msg='Ingen internettforbindelse. Sjekk nettverket og pr\u00f8v igjen.';
       showAuthMsg(msg,'error');
     });
 }
