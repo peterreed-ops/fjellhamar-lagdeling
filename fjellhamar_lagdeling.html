@@ -180,6 +180,8 @@
   .user-card{background:white;border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
   .user-role{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;}
   .user-role-admin{background:var(--gold-pale);color:#8a5a00;}
+  .user-role-superadmin{background:#f3e8ff;color:#6b21a8;}
+  .user-role-lagadmin{background:var(--gold-pale);color:#8a5a00;}
   .user-role-trener{background:var(--green-pale);color:var(--green);}
 
   @media(max-width:480px){.mode-grid{grid-template-columns:1fr;}.col-map-grid{grid-template-columns:1fr;}.main{padding:1rem;}.app-header{padding:1rem;}.request-card{flex-direction:column;align-items:flex-start;}}
@@ -1095,7 +1097,7 @@ function loadAdminPage(){
   var isSA=currentUserRole==='superadmin';
   document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
   document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
-  if(isSA){loadTeamsList();loadAllRequests();loadAllUsers();}
+  if(isSA){loadTeamsList();loadAllRequests();}
   loadAdminRequests();loadAllUsers();
 }
 
@@ -1340,61 +1342,110 @@ function loadAllUsers(){
   var list=document.getElementById('admin-all-users-list');
   if(!list||!fbDb)return;
   var filterTeam=document.getElementById('users-team-filter')?document.getElementById('users-team-filter').value:'';
+  var isSA=currentUserRole==='superadmin';
 
-  fbDb.collection('team_members').get().then(function(snap){
-    if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>Ingen brukere registrert</div>';return;}
+  // Bestem hvilke lag denne brukeren kan se:
+  // Superadmin: alle lag
+  // Lagadmin med flere lag: kun sine lag
+  // Lagadmin med ett lag: kun sitt lag
+  var allowedTeamIds=isSA?null:userTeams.map(function(t){return t.teamId;});
 
-    // Populate filter dropdown with teams
+  Promise.all([
+    fbDb.collection('teams').orderBy('name').get(),
+    fbDb.collection('team_members').get()
+  ]).then(function(results){
+    var teamsSnap=results[0];var membersSnap=results[1];
+
+    // Bygg lag-map — filtrert etter tilgang
+    var allTeams={};
+    teamsSnap.forEach(function(doc){
+      if(isSA||allowedTeamIds.indexOf(doc.id)>=0){
+        allTeams[doc.id]=doc.data().name||doc.id;
+      }
+    });
+
+    // Oppdater filter-dropdown
     var teamFilter=document.getElementById('users-team-filter');
     if(teamFilter){
       var currentFilter=teamFilter.value;
-      var teamsSeen={};
-      snap.forEach(function(doc){var d=doc.data();if(d.teamId&&d.teamName)teamsSeen[d.teamId]=d.teamName;});
-      teamFilter.innerHTML='<option value="">Alle lag</option>';
-      Object.keys(teamsSeen).sort().forEach(function(tid){
-        teamFilter.innerHTML+='<option value="'+tid+'"'+(currentFilter===tid?' selected':'')+'>'+teamsSeen[tid]+'</option>';
+      // Lagadmin med kun ett lag — skjul filter, vis kun sitt lag
+      var visibleTeamIds=Object.keys(allTeams);
+      if(visibleTeamIds.length<=1){
+        teamFilter.parentElement.style.display='none';
+      }else{
+        teamFilter.parentElement.style.display='flex';
+        teamFilter.innerHTML='<option value="">Alle lag</option>';
+        visibleTeamIds.sort(function(a,b){return allTeams[a].localeCompare(allTeams[b],'nb');}).forEach(function(tid){
+          teamFilter.innerHTML+='<option value="'+tid+'"'+(currentFilter===tid?' selected':'')+'>'+allTeams[tid]+'</option>';
+        });
+      }
+    }
+
+    // Bygg brukerliste
+    var byTeam={};
+
+    // For superadmin: vis superadmin som en oppføring under hvert lag
+    if(isSA){
+      Object.keys(allTeams).forEach(function(tid){
+        if(!byTeam[tid])byTeam[tid]={name:allTeams[tid],members:[]};
+        byTeam[tid].members.push({
+          docId:'__superadmin__',
+          data:{name:'Peter Reed (Superadmin)',email:SUPERADMIN_EMAIL,role:'superadmin',teamId:tid,teamName:allTeams[tid]},
+          isSuperAdmin:true
+        });
       });
     }
 
-    // Build members list — use docId as key to avoid duplicates
-    var byTeam={};
-    snap.forEach(function(doc){
+    // Legg til vanlige brukere
+    membersSnap.forEach(function(doc){
       var d=doc.data();
-      var tid=d.teamId||'ukjent';var tname=d.teamName||tid;
+      var tid=d.teamId||'ukjent';
+      // Sjekk at laget er synlig for denne brukeren
+      if(!allTeams[tid])return;
       if(filterTeam&&tid!==filterTeam)return;
-      if(!byTeam[tid])byTeam[tid]={name:tname,members:[]};
-      byTeam[tid].members.push({docId:doc.id,data:d});
+      if(!byTeam[tid])byTeam[tid]={name:allTeams[tid],members:[]};
+      // Unngå duplikater
+      var exists=byTeam[tid].members.some(function(m){return m.docId===doc.id;});
+      if(!exists)byTeam[tid].members.push({docId:doc.id,data:d});
     });
 
+    // Filtrer byTeam ved lag-filter
+    if(filterTeam){
+      Object.keys(byTeam).forEach(function(tid){if(tid!==filterTeam)delete byTeam[tid];});
+    }
+
     if(!Object.keys(byTeam).length){
-      list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>'+(filterTeam?'Ingen brukere på dette laget':'Ingen brukere registrert')+'</div>';
+      list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>'+(filterTeam?'Ingen brukere p\u00e5 dette laget enn\u00e5':'Ingen brukere registrert')+'</div>';
       return;
     }
 
     var html='';
-    Object.keys(byTeam).sort().forEach(function(tid){
+    Object.keys(byTeam).sort(function(a,b){return byTeam[a].name.localeCompare(byTeam[b].name,'nb');}).forEach(function(tid){
       var team=byTeam[tid];
       html+='<div style="margin-bottom:14px;">'+
         '<div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:12px;color:var(--green);padding:5px 12px;background:var(--green-pale);border-radius:var(--radius-sm);margin-bottom:6px;">\u26BD '+team.name+' ('+team.members.length+')</div>';
-      team.members.forEach(function(m){
+      team.members.sort(function(a,b){return(a.data.name||'').localeCompare(b.data.name||'','nb');}).forEach(function(m){
         var d=m.data;var role=d.role||'trener';
         var displayName=d.name||d.email||'Ukjent';
         var isMe=d.email===currentUserEmail;
+        var isSuperAdminEntry=m.isSuperAdmin;
         var safeDid=m.docId.replace(/'/g,"\\'");
         var safeName=displayName.replace(/'/g,"\\'");
-        html+='<div class="user-card" style="margin-bottom:4px;">'+
+        html+='<div class="user-card" style="margin-bottom:4px;'+(isSuperAdminEntry?'background:var(--gold-pale);border-color:var(--gold);':'')+'">' +
           '<div style="flex:1;">'+
             '<div style="font-weight:600;font-size:13px;">'+displayName+'</div>'+
             '<div style="font-size:12px;color:var(--slate-light);">'+d.email+'</div>'+
           '</div>'+
-          (!isMe?
-            '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
-              '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
-              '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
-            '</select>'+
-            '<button class="btn btn-danger btn-sm" onclick="revokeAccessGlobal(\''+safeDid+'\',\''+safeName+'\',\''+team.name.replace(/'/g,"\\'")+'\')">Fjern</button>':
-            '<span class="user-role user-role-'+role+'">'+role+'</span>'+
-            '<span style="font-size:11px;color:var(--slate-light);margin-left:6px;">deg selv</span>'
+          (isSuperAdminEntry?
+            '<span class="user-role user-role-superadmin">superadmin</span>':
+            !isMe?
+              '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
+                '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
+                '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
+              '</select>'+
+              '<button class="btn btn-danger btn-sm" onclick="revokeAccessGlobal(\''+safeDid+'\',\''+safeName+'\',\''+team.name.replace(/'/g,"\\'")+'\')">Fjern</button>':
+              '<span class="user-role user-role-'+role+'">'+role+'</span>'+
+              '<span style="font-size:11px;color:var(--slate-light);margin-left:6px;">deg selv</span>'
           )+
         '</div>';
       });
