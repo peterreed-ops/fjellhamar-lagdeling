@@ -576,6 +576,26 @@
     <div id="admin-all-users-list"><div class="empty"><div class="empty-icon">👥</div>Laster...</div></div>
 
     <div style="height:2px;background:linear-gradient(to right,var(--gold),transparent);margin:1.5rem 0;border-radius:99px;"></div>
+
+    <!-- Superadmin-administrasjon -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div class="section-divider" style="margin:0;">👑 Superadmins</div>
+      <button class="btn btn-sm" onclick="loadSuperadminList()">🔄 Oppdater</button>
+    </div>
+    <div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,.08);border-radius:var(--radius-sm);border-left:3px solid var(--gold);line-height:1.6;">
+      <strong style="color:var(--gold);">Slik tildeler du superadmin:</strong><br>
+      1. Personen må først registrere seg i appen og bli godkjent av deg<br>
+      2. Skriv inn e-postadressen deres nedenfor og trykk "+ Legg til"<br>
+      3. Neste gang de logger inn får de automatisk superadmin-tilgang
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <input type="email" id="new-superadmin-email" placeholder="epost@eksempel.no" style="flex:1;min-width:200px;font-size:13px;padding:8px 12px;border:1.5px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);background:rgba(255,255,255,.1);color:white;" />
+      <input type="text" id="new-superadmin-name" placeholder="Fullt navn" style="flex:1;min-width:160px;font-size:13px;padding:8px 12px;border:1.5px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);background:rgba(255,255,255,.1);color:white;" />
+      <button class="btn btn-gold btn-sm" onclick="addSuperadmin()">+ Legg til</button>
+    </div>
+    <div id="superadmin-list"><div class="empty" style="color:rgba(255,255,255,.5);">Laster...</div></div>
+
+    <div style="height:2px;background:linear-gradient(to right,var(--gold),transparent);margin:1.5rem 0;border-radius:99px;"></div>
   </div>
 
   <!-- LAGADMIN-SEKSJON -->
@@ -720,46 +740,74 @@ function skipAuthForTesting(){
 }
 function checkUserApproved(user){
   currentUserEmail=user.email;
-  // Superadmin — full tilgang uten å sjekke Firestore
-  if(user.email===SUPERADMIN_EMAIL){
-    currentUserRole='superadmin';
-    currentTeamId='g2016';currentTeamName='Gutter 2016';
-    userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:'superadmin'}];
-    onUserAccessGranted('Peter Reed','superadmin');
-    return;
-  }
-  // Sjekk team_members først
-  fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
-    if(!snap.empty){
-      userTeams=[];
-      snap.forEach(function(doc){userTeams.push(Object.assign({docId:doc.id},doc.data()));});
-      if(userTeams.length===1){
-        var t=userTeams[0];
-        currentTeamId=t.teamId;currentTeamName=t.teamName;currentUserRole=t.role||'trener';
-        onUserAccessGranted(t.name||user.email,currentUserRole);
-      }else{
-        showTeamSelectorModal(userTeams,user.email);
-      }
+
+  // Sjekk superadmins-collection i Firestore (inkl. hardkodet superadmin)
+  var isMasterAdmin=user.email===SUPERADMIN_EMAIL;
+
+  fbDb.collection('superadmins').doc(user.email).get().then(function(saDoc){
+    if(isMasterAdmin||saDoc.exists){
+      // Superadmin — finn navn fra team_members eller bruk e-post
+      fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
+        var name=user.email;
+        if(!snap.empty)name=snap.docs[0].data().name||user.email;
+        else if(isMasterAdmin)name='Peter Reed';
+        currentUserRole='superadmin';
+        // Superadmin trenger ikke et spesifikt lag — bruker første tilgjengelige
+        fbDb.collection('teams').limit(1).get().then(function(tSnap){
+          if(!tSnap.empty){
+            currentTeamId=tSnap.docs[0].id;currentTeamName=tSnap.docs[0].data().name||tSnap.docs[0].id;
+          }else{currentTeamId='g2016';currentTeamName='Gutter 2016';}
+          userTeams=[{teamId:currentTeamId,teamName:currentTeamName,role:'superadmin'}];
+          onUserAccessGranted(name,'superadmin');
+        });
+      });
       return;
     }
-    // Bakoverkompatibilitet: sjekk approved_users
-    fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
-      if(doc.exists){
-        var role=doc.data().role||'trener';
-        currentTeamId='g2016';currentTeamName='Gutter 2016';currentUserRole=role;
-        userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:role}];
-        onUserAccessGranted(doc.data().name||user.email,role);
-      }else{
-        fbAuth.signOut().then(function(){
-          showAuthOverlay(true);switchAuthTab('login');
-          showAuthMsg('\u23F3 Foresp\u00f8rselen din er ikke godkjent enn\u00e5.\n\nAdmin m\u00e5 godkjenne deg f\u00f8r du kan logge inn. Pr\u00f8v igjen etter at du har mottatt beskjed.','pending');
-        });
+
+    // Sjekk team_members
+    fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
+      if(!snap.empty){
+        userTeams=[];
+        snap.forEach(function(doc){userTeams.push(Object.assign({docId:doc.id},doc.data()));});
+        if(userTeams.length===1){
+          var t=userTeams[0];
+          currentTeamId=t.teamId;currentTeamName=t.teamName;currentUserRole=t.role||'trener';
+          onUserAccessGranted(t.name||user.email,currentUserRole);
+        }else{
+          showTeamSelectorModal(userTeams,user.email);
+        }
+        return;
       }
+      // Bakoverkompatibilitet: sjekk approved_users
+      fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
+        if(doc.exists){
+          var role=doc.data().role||'trener';
+          currentTeamId='g2016';currentTeamName='Gutter 2016';currentUserRole=role;
+          userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:role}];
+          onUserAccessGranted(doc.data().name||user.email,role);
+        }else{
+          fbAuth.signOut().then(function(){
+            showAuthOverlay(true);switchAuthTab('login');
+            showAuthMsg('\u23F3 Foresp\u00f8rselen din er ikke godkjent enn\u00e5.\n\nAdmin m\u00e5 godkjenne deg f\u00f8r du kan logge inn. Pr\u00f8v igjen etter at du har mottatt beskjed.','pending');
+          });
+        }
+      });
+    }).catch(function(e){
+      console.warn('checkUserApproved:',e);
+      fbAuth.signOut().then(function(){
+        showAuthOverlay(true);
+        showAuthMsg('Kunne ikke verifisere tilgang. Sjekk internettforbindelsen og pr\u00f8v igjen.','error');
+      });
     });
-  }).catch(function(e){
-    console.warn('checkUserApproved feil:',e);
-    fbAuth.signOut();showAuthOverlay(true);
-    showAuthMsg('Kunne ikke verifisere tilgang. Sjekk internettforbindelsen og pr\u00f8v igjen.','error');
+  }).catch(function(){
+    // Fallback hvis superadmins-collection ikke kan leses
+    if(isMasterAdmin){
+      currentUserRole='superadmin';currentTeamId='g2016';currentTeamName='Gutter 2016';
+      userTeams=[{teamId:'g2016',teamName:'Gutter 2016',role:'superadmin'}];
+      onUserAccessGranted('Peter Reed','superadmin');
+    } else {
+      fbAuth.signOut().then(function(){showAuthOverlay(true);showAuthMsg('Kunne ikke verifisere tilgang. Pr\u00f8v igjen.','error');});
+    }
   });
 }
 
@@ -1097,8 +1145,67 @@ function loadAdminPage(){
   var isSA=currentUserRole==='superadmin';
   document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
   document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
-  if(isSA){loadTeamsList();loadAllRequests();}
+  if(isSA){loadTeamsList();loadAllRequests();loadSuperadminList();}
   loadAdminRequests();loadAllUsers();
+}
+
+// ── SUPERADMIN MANAGEMENT ──────────────────────────────────────
+function loadSuperadminList(){
+  var list=document.getElementById('superadmin-list');
+  if(!list||!fbDb)return;
+  fbDb.collection('superadmins').get().then(function(snap){
+    if(snap.empty){
+      list.innerHTML='<div style="font-size:13px;color:rgba(255,255,255,.5);padding:8px 0;">Ingen ekstra superadmins registrert ennå. Peter Reed er alltid superadmin.</div>';
+      return;
+    }
+    var html='';
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var isMaster=doc.id===SUPERADMIN_EMAIL;
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.08);border-radius:var(--radius-sm);margin-bottom:6px;flex-wrap:wrap;gap:8px;">'+
+        '<div>'+
+          '<div style="font-weight:600;font-size:13px;color:white;">'+(d.name||doc.id)+'</div>'+
+          '<div style="font-size:12px;color:rgba(255,255,255,.6);">'+doc.id+'</div>'+
+          (d.added?'<div style="font-size:11px;color:var(--gold);margin-top:2px;">Lagt til '+new Date(d.added).toLocaleDateString('nb-NO')+'</div>':'')+'</div>'+
+        (!isMaster?
+          '<button class="btn btn-danger btn-sm" onclick="removeSuperadmin(\''+doc.id.replace(/'/g,"\\'")+'\')">Fjern</button>':
+          '<span style="font-size:11px;color:var(--gold);">Primær superadmin</span>'
+        )+
+      '</div>';
+    });
+    list.innerHTML=html;
+  }).catch(function(e){list.innerHTML='<div style="font-size:13px;color:var(--danger);">Feil: '+e.message+'</div>';});
+}
+
+function addSuperadmin(){
+  var email=document.getElementById('new-superadmin-email').value.trim().toLowerCase();
+  var name=document.getElementById('new-superadmin-name').value.trim();
+  if(!email){alert('Fyll inn e-postadresse.');return;}
+  if(!name){alert('Fyll inn navn.');return;}
+  if(email===SUPERADMIN_EMAIL){alert('Peter Reed er allerede superadmin.');return;}
+
+  // Sjekk at personen finnes i systemet
+  fbDb.collection('team_members').where('email','==',email).get().then(function(snap){
+    var displayName=name;
+    if(!snap.empty&&!displayName){displayName=snap.docs[0].data().name||email;}
+
+    fbDb.collection('superadmins').doc(email).set({
+      name:displayName,email:email,added:new Date().toISOString(),addedBy:currentUserEmail
+    }).then(function(){
+      document.getElementById('new-superadmin-email').value='';
+      document.getElementById('new-superadmin-name').value='';
+      loadSuperadminList();
+      alert('\u2705 '+displayName+' er n\u00e5 superadmin!\n\nDe f\u00e5r tilgangen neste gang de logger inn.');
+    });
+  }).catch(function(e){alert('Feil: '+e.message);});
+}
+
+function removeSuperadmin(email){
+  if(email===SUPERADMIN_EMAIL){alert('Kan ikke fjerne prim\u00e6r superadmin.');return;}
+  if(!confirm('Fjerne superadmin-rettigheter fra '+email+'?\n\nDe beholder vanlig bruker-tilgang til lagene sine.'))return;
+  fbDb.collection('superadmins').doc(email).delete()
+    .then(function(){loadSuperadminList();})
+    .catch(function(e){alert('Feil: '+e.message);});
 }
 
 // ── SUPERADMIN TEAM MANAGEMENT ─────────────────────────────────
