@@ -580,20 +580,12 @@
     <!-- Superadmin-administrasjon -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <div class="section-divider" style="margin:0;">👑 Superadmins</div>
-      <button class="btn btn-sm" onclick="loadSuperadminList()">🔄 Oppdater</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-gold btn-sm" onclick="openAddSuperadminModal()">+ Legg til superadmin</button>
+        <button class="btn btn-sm" onclick="loadSuperadminList()">🔄 Oppdater</button>
+      </div>
     </div>
-    <div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,.08);border-radius:var(--radius-sm);border-left:3px solid var(--gold);line-height:1.6;">
-      <strong style="color:var(--gold);">Slik tildeler du superadmin:</strong><br>
-      1. Personen må først registrere seg i appen og bli godkjent av deg<br>
-      2. Skriv inn e-postadressen deres nedenfor og trykk "+ Legg til"<br>
-      3. Neste gang de logger inn får de automatisk superadmin-tilgang
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-      <input type="email" id="new-superadmin-email" placeholder="epost@eksempel.no" style="flex:1;min-width:200px;font-size:13px;padding:8px 12px;border:1.5px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);background:rgba(255,255,255,.1);color:white;" />
-      <input type="text" id="new-superadmin-name" placeholder="Fullt navn" style="flex:1;min-width:160px;font-size:13px;padding:8px 12px;border:1.5px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);background:rgba(255,255,255,.1);color:white;" />
-      <button class="btn btn-gold btn-sm" onclick="addSuperadmin()">+ Legg til</button>
-    </div>
-    <div id="superadmin-list"><div class="empty" style="color:rgba(255,255,255,.5);">Laster...</div></div>
+    <div id="superadmin-list"><div class="empty">Laster...</div></div>
 
     <div style="height:2px;background:linear-gradient(to right,var(--gold),transparent);margin:1.5rem 0;border-radius:99px;"></div>
   </div>
@@ -635,6 +627,39 @@
 </div>
 
 </div>
+<!-- SUPERADMIN MODAL -->
+<div class="modal-overlay" id="superadmin-modal" onclick="closeSuperadminModalOutside(event)">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-topbar" style="background:var(--slate);border-bottom:2px solid var(--gold);">
+      <span class="modal-topbar-title" style="color:var(--gold);">👑 Legg til superadmin</span>
+      <button class="modal-close" style="color:rgba(255,255,255,.7);" onclick="closeSuperadminModal()">&#x2715;</button>
+    </div>
+    <div style="padding:1.25rem;">
+      <div style="background:var(--gold-pale);border-left:3px solid var(--gold);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:1.25rem;">
+        <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:6px;">Slik fungerer det:</div>
+        <div style="font-size:13px;color:var(--slate-light);line-height:1.7;">
+          <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="background:var(--gold);color:white;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">1</span><span>Personen må ha registrert seg og blitt godkjent i appen</span></div>
+          <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="background:var(--gold);color:white;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">2</span><span>Skriv inn e-post og navn nedenfor</span></div>
+          <div style="display:flex;gap:8px;"><span style="background:var(--gold);color:white;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">3</span><span>Neste gang de logger inn får de automatisk superadmin-tilgang</span></div>
+        </div>
+      </div>
+      <div class="auth-field">
+        <label>E-postadresse</label>
+        <input type="email" id="new-superadmin-email" placeholder="epost@eksempel.no" onkeydown="if(event.key==='Enter')addSuperadmin()"/>
+      </div>
+      <div class="auth-field">
+        <label>Fullt navn</label>
+        <input type="text" id="new-superadmin-name" placeholder="Ola Nordmann" onkeydown="if(event.key==='Enter')addSuperadmin()"/>
+      </div>
+      <div id="superadmin-modal-msg" style="display:none;font-size:13px;padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:10px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gold" onclick="addSuperadmin()">👑 Gi superadmin-tilgang</button>
+      <button class="btn" onclick="closeSuperadminModal()">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="share-modal" onclick="closeShareModalOutside(event)">
   <div class="modal-box">
     <div class="modal-topbar">
@@ -1155,49 +1180,63 @@ function loadSuperadminList(){
   if(!list||!fbDb)return;
   fbDb.collection('superadmins').get().then(function(snap){
     if(snap.empty){
-      list.innerHTML='<div style="font-size:13px;color:rgba(255,255,255,.5);padding:8px 0;">Ingen ekstra superadmins registrert ennå. Peter Reed er alltid superadmin.</div>';
+      list.innerHTML='<div class="empty"><div class="empty-icon">👑</div>Ingen ekstra superadmins ennå. Peter Reed er alltid superadmin.</div>';
       return;
     }
     var html='';
     snap.forEach(function(doc){
       var d=doc.data();
       var isMaster=doc.id===SUPERADMIN_EMAIL;
-      html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.08);border-radius:var(--radius-sm);margin-bottom:6px;flex-wrap:wrap;gap:8px;">'+
-        '<div>'+
-          '<div style="font-weight:600;font-size:13px;color:white;">'+(d.name||doc.id)+'</div>'+
-          '<div style="font-size:12px;color:rgba(255,255,255,.6);">'+doc.id+'</div>'+
-          (d.added?'<div style="font-size:11px;color:var(--gold);margin-top:2px;">Lagt til '+new Date(d.added).toLocaleDateString('nb-NO')+'</div>':'')+'</div>'+
-        (!isMaster?
-          '<button class="btn btn-danger btn-sm" onclick="removeSuperadmin(\''+doc.id.replace(/'/g,"\\'")+'\')">Fjern</button>':
-          '<span style="font-size:11px;color:var(--gold);">Primær superadmin</span>'
-        )+
+      html+='<div class="user-card" style="margin-bottom:6px;'+(isMaster?'background:var(--gold-pale);border-color:var(--gold);':'')+'">'+
+        '<div style="flex:1;">'+
+          '<div style="font-weight:600;font-size:14px;color:var(--slate);">'+(d.name||doc.id)+'</div>'+
+          '<div style="font-size:12px;color:var(--slate-light);">'+doc.id+'</div>'+
+          (d.added?'<div style="font-size:11px;color:var(--gold);margin-top:2px;">Lagt til: '+new Date(d.added).toLocaleDateString('nb-NO')+'</div>':'')+'</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          '<span class="user-role user-role-superadmin">superadmin</span>'+
+          (!isMaster?'<button class="btn btn-danger btn-sm" onclick="removeSuperadmin(\''+doc.id.replace(/'/g,"\\'")+'\')">Fjern</button>':
+          '<span style="font-size:11px;color:var(--slate-light);">primær</span>')+
+        '</div>'+
       '</div>';
     });
     list.innerHTML=html;
   }).catch(function(e){list.innerHTML='<div style="font-size:13px;color:var(--danger);">Feil: '+e.message+'</div>';});
 }
 
+function openAddSuperadminModal(){
+  document.getElementById('new-superadmin-email').value='';
+  document.getElementById('new-superadmin-name').value='';
+  document.getElementById('superadmin-modal-msg').style.display='none';
+  document.getElementById('superadmin-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('new-superadmin-email').focus();},100);
+}
+function closeSuperadminModal(){document.getElementById('superadmin-modal').classList.remove('open');}
+function closeSuperadminModalOutside(e){if(e.target===document.getElementById('superadmin-modal'))closeSuperadminModal();}
+
 function addSuperadmin(){
   var email=document.getElementById('new-superadmin-email').value.trim().toLowerCase();
   var name=document.getElementById('new-superadmin-name').value.trim();
-  if(!email){alert('Fyll inn e-postadresse.');return;}
-  if(!name){alert('Fyll inn navn.');return;}
-  if(email===SUPERADMIN_EMAIL){alert('Peter Reed er allerede superadmin.');return;}
+  var msgEl=document.getElementById('superadmin-modal-msg');
 
-  // Sjekk at personen finnes i systemet
-  fbDb.collection('team_members').where('email','==',email).get().then(function(snap){
-    var displayName=name;
-    if(!snap.empty&&!displayName){displayName=snap.docs[0].data().name||email;}
+  function showModalMsg(msg,type){
+    msgEl.textContent=msg;msgEl.style.display='block';
+    var colors={success:'var(--green-pale)',error:'#fdf2f2',warn:'var(--gold-pale)'};
+    var borders={success:'var(--green-light)',error:'#f5c6c2',warn:'var(--gold)'};
+    var texts={success:'var(--green)',error:'var(--danger)',warn:'#8a5a00'};
+    msgEl.style.background=colors[type];msgEl.style.border='1px solid '+borders[type];msgEl.style.color=texts[type];
+  }
 
-    fbDb.collection('superadmins').doc(email).set({
-      name:displayName,email:email,added:new Date().toISOString(),addedBy:currentUserEmail
-    }).then(function(){
-      document.getElementById('new-superadmin-email').value='';
-      document.getElementById('new-superadmin-name').value='';
-      loadSuperadminList();
-      alert('\u2705 '+displayName+' er n\u00e5 superadmin!\n\nDe f\u00e5r tilgangen neste gang de logger inn.');
-    });
-  }).catch(function(e){alert('Feil: '+e.message);});
+  if(!email){showModalMsg('Fyll inn e-postadresse.','error');return;}
+  if(!name){showModalMsg('Fyll inn navn.','error');return;}
+  if(email===SUPERADMIN_EMAIL){showModalMsg('Peter Reed er allerede superadmin.','warn');return;}
+
+  fbDb.collection('superadmins').doc(email).set({
+    name:name,email:email,added:new Date().toISOString(),addedBy:currentUserEmail
+  }).then(function(){
+    showModalMsg('\u2705 '+name+' er n\u00e5 superadmin! De f\u00e5r tilgangen neste gang de logger inn.','success');
+    loadSuperadminList();
+    setTimeout(function(){closeSuperadminModal();},2000);
+  }).catch(function(e){showModalMsg('Feil: '+e.message,'error');});
 }
 
 function removeSuperadmin(email){
