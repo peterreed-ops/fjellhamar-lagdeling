@@ -536,30 +536,30 @@
     </div>
     <div id="admin-all-requests-list"><div class="empty"><div class="empty-icon">📋</div>Laster...</div></div>
 
-    <!-- Alle aktive brukere på tvers av lag -->
+    <!-- Aktive brukere med lag-filter -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin:1.25rem 0 10px;flex-wrap:wrap;gap:8px;">
-      <div class="section-divider" style="margin:0;">Alle aktive brukere</div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-primary btn-sm" onclick="showGrantAccessForm()">+ Gi tilgang til lag</button>
+      <div class="section-divider" style="margin:0;">Aktive brukere</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="showGrantAccessForm()">+ Gi tilgang</button>
+        <button class="btn btn-sm" onclick="exportUsersExcel()">📥 Excel</button>
         <button class="btn btn-sm" onclick="loadAllUsers()">🔄 Oppdater</button>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <label style="font-size:13px;color:var(--slate-light);white-space:nowrap;">Vis lag:</label>
+      <select id="users-team-filter" onchange="loadAllUsers()" style="flex:1;min-width:160px;font-size:13px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);">
+        <option value="">Alle lag</option>
+      </select>
+    </div>
     <div id="grant-access-form" style="display:none;" class="card">
       <div class="card-title">Gi eksisterende bruker tilgang til lag</div>
-      <div class="auth-field">
-        <label>Velg bruker</label>
-        <select id="grant-user-select" style="width:100%;">
-          <option value="">-- Laster brukere... --</option>
-        </select>
+      <div class="auth-field"><label>Velg bruker</label>
+        <select id="grant-user-select" style="width:100%;"><option value="">-- Laster... --</option></select>
       </div>
-      <div class="auth-field">
-        <label>Velg lag</label>
-        <select id="grant-team-select" style="width:100%;">
-          <option value="">-- Velg lag --</option>
-        </select>
+      <div class="auth-field"><label>Velg lag</label>
+        <select id="grant-team-select" style="width:100%;"><option value="">-- Velg lag --</option></select>
       </div>
-      <div class="auth-field">
-        <label>Rolle på dette laget</label>
+      <div class="auth-field"><label>Rolle</label>
         <select id="grant-role-select" style="width:100%;">
           <option value="trener">Trener</option>
           <option value="lagadmin">Lagadmin</option>
@@ -592,12 +592,6 @@
   </div>
   <div id="admin-requests-list">
     <div class="empty"><div class="empty-icon">✅</div>Ingen ventende forespørsler</div>
-  </div>
-
-  <!-- Aktive brukere for dette laget -->
-  <div class="section-divider" style="margin-top:1.5rem;">Aktive brukere — <span id="admin-users-team-label" style="color:var(--green);"></span></div>
-  <div id="admin-users-list">
-    <div class="empty"><div class="empty-icon">👥</div>Laster...</div>
   </div>
 
   <!-- Grupperingshistorikk -->
@@ -1101,9 +1095,8 @@ function loadAdminPage(){
   var isSA=currentUserRole==='superadmin';
   document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
   document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
-  document.getElementById('admin-users-team-label').textContent=currentTeamName||'';
   if(isSA){loadTeamsList();loadAllRequests();loadAllUsers();}
-  loadAdminRequests();loadApprovedUsers();
+  loadAdminRequests();loadAllUsers();
 }
 
 // ── SUPERADMIN TEAM MANAGEMENT ─────────────────────────────────
@@ -1156,7 +1149,7 @@ function switchActiveTeam(btn){
   loadFromFirestore(function(){
     if(allPlayers.length){document.getElementById('levels-done').textContent='\u2713 '+allPlayers.length+' spillere lastet';document.getElementById('levels-done').style.display='block';document.getElementById('levels-saved-row').style.display='flex';updateSetupSummary();}
   });
-  loadAdminRequests();loadApprovedUsers();
+  loadAdminRequests();loadAllUsers();
   alert('Byttet til laget "'+name+'"');
 }
 function deleteTeam(btn){
@@ -1211,7 +1204,7 @@ function approveRequest(docId,name,email,teamId,teamName,passwordHint){
     return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
   }).then(function(){
     alert(name+' er godkjent og kan n\u00e5 logge inn p\u00e5 laget "'+teamName+'"!');
-    loadAdminRequests();loadApprovedUsers();
+    loadAdminRequests();loadAllUsers();
     if(typeof loadAllRequests==='function')loadAllRequests();
   }).catch(function(err){
     alert('Feil: '+err.message);
@@ -1261,7 +1254,7 @@ function loadAdminRequests(){
   });
 
   // Last aktive brukere samtidig
-  loadApprovedUsers();
+  loadAllUsers();
 }
 
 function loadRequestHistory(){
@@ -1306,7 +1299,7 @@ function deleteRequest(docId, name){
     .catch(function(e){ alert('Feil: '+e.message); });
 }
 
-function loadApprovedUsers(){
+function loadAllUsers(){
   if(!fbDb||!currentTeamId)return;
   var list=document.getElementById('admin-users-list');
   // Oppdater lag-label
@@ -1346,15 +1339,38 @@ function loadApprovedUsers(){
 function loadAllUsers(){
   var list=document.getElementById('admin-all-users-list');
   if(!list||!fbDb)return;
+  var filterTeam=document.getElementById('users-team-filter')?document.getElementById('users-team-filter').value:'';
+
   fbDb.collection('team_members').get().then(function(snap){
     if(snap.empty){list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>Ingen brukere registrert</div>';return;}
+
+    // Populate filter dropdown with teams
+    var teamFilter=document.getElementById('users-team-filter');
+    if(teamFilter){
+      var currentFilter=teamFilter.value;
+      var teamsSeen={};
+      snap.forEach(function(doc){var d=doc.data();if(d.teamId&&d.teamName)teamsSeen[d.teamId]=d.teamName;});
+      teamFilter.innerHTML='<option value="">Alle lag</option>';
+      Object.keys(teamsSeen).sort().forEach(function(tid){
+        teamFilter.innerHTML+='<option value="'+tid+'"'+(currentFilter===tid?' selected':'')+'>'+teamsSeen[tid]+'</option>';
+      });
+    }
+
+    // Build members list — use docId as key to avoid duplicates
     var byTeam={};
     snap.forEach(function(doc){
       var d=doc.data();
       var tid=d.teamId||'ukjent';var tname=d.teamName||tid;
+      if(filterTeam&&tid!==filterTeam)return;
       if(!byTeam[tid])byTeam[tid]={name:tname,members:[]};
       byTeam[tid].members.push({docId:doc.id,data:d});
     });
+
+    if(!Object.keys(byTeam).length){
+      list.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDC65</div>'+(filterTeam?'Ingen brukere på dette laget':'Ingen brukere registrert')+'</div>';
+      return;
+    }
+
     var html='';
     Object.keys(byTeam).sort().forEach(function(tid){
       var team=byTeam[tid];
@@ -1372,8 +1388,7 @@ function loadAllUsers(){
             '<div style="font-size:12px;color:var(--slate-light);">'+d.email+'</div>'+
           '</div>'+
           (!isMe?
-            '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" '+
-              'style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
+            '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
               '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
               '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
             '</select>'+
@@ -1387,6 +1402,25 @@ function loadAllUsers(){
     });
     list.innerHTML=html;
   }).catch(function(e){list.innerHTML='<div class="empty">Feil: '+e.message+'</div>';});
+}
+
+function exportUsersExcel(){
+  if(!fbDb)return;
+  fbDb.collection('team_members').get().then(function(snap){
+    if(snap.empty){alert('Ingen brukere å eksportere.');return;}
+    var rows=[['Navn','E-post','Lag','Rolle','Godkjent']];
+    var members=[];
+    snap.forEach(function(doc){var d=doc.data();members.push(d);});
+    members.sort(function(a,b){return(a.teamName||'').localeCompare(b.teamName||'','nb')||((a.name||'').localeCompare(b.name||'','nb'));});
+    members.forEach(function(d){
+      rows.push([d.name||'',d.email||'',d.teamName||d.teamId||'',d.role||'trener',d.approved?new Date(d.approved).toLocaleDateString('nb-NO'):'']);
+    });
+    var wb=XLSX.utils.book_new();
+    var ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:26},{wch:32},{wch:20},{wch:12},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Brukere');
+    XLSX.writeFile(wb,'Fjellhamar_brukere_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  });
 }
 
 function showGrantAccessForm(){
@@ -1457,17 +1491,17 @@ function showGrantMsg(msg,type){
 function revokeAccessGlobal(memberId, name, teamName){
   if(!confirm('Fjerne '+name+' fra laget "'+teamName+'"?'))return;
   fbDb.collection('team_members').doc(memberId).delete()
-    .then(function(){loadAllUsers();loadApprovedUsers();});
+    .then(function(){loadAllUsers();loadAllUsers();});
 }
 
 function changeUserRole(memberId, name, newRole){
-  if(!confirm('Endre '+name+' til rollen '+newRole+'?')){loadApprovedUsers();return;}
+  if(!confirm('Endre '+name+' til rollen '+newRole+'?')){loadAllUsers();return;}
   fbDb.collection('team_members').doc(memberId).update({role:newRole})
     .then(function(){
-      loadApprovedUsers();
+      loadAllUsers();
       if(currentUserRole==='superadmin')loadAllUsers();
     })
-    .catch(function(e){alert('Feil: '+e.message);loadApprovedUsers();});
+    .catch(function(e){alert('Feil: '+e.message);loadAllUsers();});
 }
 
 
@@ -1480,7 +1514,7 @@ function rejectRequest(docId, name){
 function revokeAccess(memberId, name){
   if(!confirm('Fjerne tilgangen til '+name+' for laget "'+currentTeamName+'"?'))return;
   fbDb.collection('team_members').doc(memberId).delete()
-    .then(function(){loadApprovedUsers();});
+    .then(function(){loadAllUsers();});
 }
 
 function dragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('drag-over');}
