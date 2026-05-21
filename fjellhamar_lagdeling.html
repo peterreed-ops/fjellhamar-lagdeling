@@ -2171,29 +2171,95 @@ function generateAdapted(pool,n,rp){
   var l2=shuffle(pool.filter(function(p){return p.level===2;}));
   var l3=shuffle(pool.filter(function(p){return p.level===3;}));
   var upperCount=Math.floor(n/2),lowerCount=n-upperCount;
-  var upperNeeded=Math.round((pool.length/n)*upperCount);
-  var upperPlayers=l1.concat(l2.slice(0,Math.max(0,upperNeeded-l1.length)));
-  var lowerPlayers=l2.slice(Math.max(0,upperNeeded-l1.length)).concat(l3);
-  function snakeDraft(players,ng){
+  var total=pool.length;
+
+  // Mål: alle n grupper skal ha så likt antall som mulig totalt
+  // Beregn ideell størrelse per gruppe
+  var idealPerGroup=total/n;
+
+  // Beregn ideelt antall spillere i øvre sjikt
+  var upperIdeal=Math.round(idealPerGroup*upperCount);
+
+  // Sørg for at øvre sjikt gir like store grupper parvis
+  // Med upperCount=2: upperIdeal bør være partall
+  if(upperCount>=2&&upperCount%2===0){
+    if(upperIdeal%upperCount!==0){
+      // Rund til nærmeste multiplum av upperCount
+      upperIdeal=Math.round(upperIdeal/upperCount)*upperCount;
+    }
+  }
+
+  // Sørg for at nedre sjikt også gir like store grupper parvis
+  var lowerIdeal=total-upperIdeal;
+  if(lowerCount>=2&&lowerCount%2===0){
+    if(lowerIdeal%lowerCount!==0){
+      lowerIdeal=Math.round(lowerIdeal/lowerCount)*lowerCount;
+      upperIdeal=total-lowerIdeal;
+    }
+  }
+
+  // Klem til gyldige grenser
+  upperIdeal=Math.max(upperCount,Math.min(total-lowerCount,upperIdeal));
+  lowerIdeal=total-upperIdeal;
+
+  // Fordel l2-spillere mellom sjiktene for å nå ideal-antall
+  var upperFromL1=Math.min(l1.length,upperIdeal);
+  var upperFromL2=Math.max(0,upperIdeal-upperFromL1);
+  // Begrens til tilgjengelige l2-spillere
+  upperFromL2=Math.min(upperFromL2,l2.length);
+  upperIdeal=upperFromL1+upperFromL2;
+  lowerIdeal=total-upperIdeal;
+
+  var upperPlayers=l1.concat(l2.slice(0,upperFromL2));
+  var lowerPlayers=l2.slice(upperFromL2).concat(l3);
+
+  // Fordel jevnt med eksakt like store grupper i hvert sjikt
+  function evenDraft(players,ng){
     var grps=[];for(var k=0;k<ng;k++)grps.push([]);
+    if(!players.length||!ng)return grps;
     var sorted=players.slice().sort(function(a,b){return a.level-b.level;});
-    sorted.forEach(function(p,i){var round=Math.floor(i/ng),pos=i%ng;grps[round%2===0?pos:ng-1-pos].push(p);});
+    var base=Math.floor(sorted.length/ng);
+    var extra=sorted.length%ng;
+    // For parvis balanse: gi extra til siste grupper (ikke første)
+    // slik at grp[0]==grp[1] og grp[2]==grp[3] om mulig
+    var sizes=[];
+    for(var k=0;k<ng;k++){
+      // Fordel extra jevnt: annenhver gruppe får +1
+      sizes.push(base+(k>=ng-extra?1:0));
+    }
+    var idx=0,round=0;
+    while(idx<sorted.length){
+      var forward=round%2===0;
+      for(var pos=0;pos<ng&&idx<sorted.length;pos++){
+        var g=forward?pos:ng-1-pos;
+        if(grps[g].length<sizes[g])grps[g].push(sorted[idx++]);
+      }
+      round++;
+    }
     return grps;
   }
-  var ug=snakeDraft(upperPlayers,upperCount),lg=snakeDraft(lowerPlayers,lowerCount);
+
+  var ug=evenDraft(upperPlayers,upperCount);
+  var lg=evenDraft(lowerPlayers,lowerCount);
+
+  // Variasjon-optimalisering (kun bytt mellom like store grupper)
   function optimise(tg){
     var ng=tg.length;if(ng<2)return;
-    for(var s=0;s<80;s++){
+    for(var s=0;s<120;s++){
       var t1=Math.floor(Math.random()*ng),t2=Math.floor(Math.random()*ng);
       if(t1===t2||!tg[t1].length||!tg[t2].length)continue;
       var i1=Math.floor(Math.random()*tg[t1].length),i2=Math.floor(Math.random()*tg[t2].length);
       var p1=tg[t1][i1],p2=tg[t2][i2];
-      var before=pairCost(tg[t1],rp)+pairCost(tg[t2],rp);
-      tg[t1][i1]=p2;tg[t2][i2]=p1;
-      if(pairCost(tg[t1],rp)+pairCost(tg[t2],rp)>=before){tg[t1][i1]=p1;tg[t2][i2]=p2;}
+      if(tg[t1].length===tg[t2].length){
+        var before=pairCost(tg[t1],rp)+pairCost(tg[t2],rp);
+        tg[t1][i1]=p2;tg[t2][i2]=p1;
+        if(pairCost(tg[t1],rp)+pairCost(tg[t2],rp)>=before){tg[t1][i1]=p1;tg[t2][i2]=p2;}
+      }
     }
   }
-  optimise(ug);optimise(lg);return ug.concat(lg);
+
+  optimise(ug);optimise(lg);
+  return ug.concat(lg);
 }
 function generateBalanced(pool,n,rp){
   var groups=[];for(var k=0;k<n;k++)groups.push([]);
