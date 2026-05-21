@@ -314,6 +314,17 @@
   </div>
 </div>
 
+<!-- LAGVELGER -->
+<div id="team-selector-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:998;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:white;border-radius:var(--radius);width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="background:var(--slate);padding:1.25rem;text-align:center;border-bottom:3px solid var(--gold);">
+      <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--gold);">Velg lag</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:4px;">Du har tilgang til flere lag</div>
+    </div>
+    <div style="padding:1.25rem;" id="team-selector-body"></div>
+  </div>
+</div>
+
 <div class="nav-tabs-wrapper">
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="showPage('setup')">Last opp</button>
@@ -809,6 +820,13 @@ function skipAuthForTesting(){
     updateSetupSummary();
   }
 }
+function saveLastTeam(teamId, teamName){
+  try{localStorage.setItem('fk_last_team', JSON.stringify({id:teamId,name:teamName}));}catch(e){}
+}
+function loadLastTeam(){
+  try{return JSON.parse(localStorage.getItem('fk_last_team')||'null');}catch(e){return null;}
+}
+
 function checkUserApproved(user){
   currentUserEmail=user.email;
 
@@ -823,11 +841,18 @@ function checkUserApproved(user){
         if(!snap.empty)name=snap.docs[0].data().name||user.email;
         else if(isMasterAdmin)name='Peter Reed';
         currentUserRole='superadmin';
-        // Superadmin trenger ikke et spesifikt lag — bruker første tilgjengelige
-        fbDb.collection('teams').limit(1).get().then(function(tSnap){
-          if(!tSnap.empty){
-            currentTeamId=tSnap.docs[0].id;currentTeamName=tSnap.docs[0].data().name||tSnap.docs[0].id;
-          }else{currentTeamId='g2016';currentTeamName='Gutter 2016';}
+        // Bruk sist besøkte lag, ellers første tilgjengelige
+        var lastTeam=loadLastTeam();
+        fbDb.collection('teams').orderBy('name').get().then(function(tSnap){
+          var chosen=null;
+          if(lastTeam){
+            tSnap.forEach(function(doc){if(doc.id===lastTeam.id)chosen={id:doc.id,name:doc.data().name||doc.id};});
+          }
+          if(!chosen&&!tSnap.empty){
+            chosen={id:tSnap.docs[0].id,name:tSnap.docs[0].data().name||tSnap.docs[0].id};
+          }
+          if(chosen){currentTeamId=chosen.id;currentTeamName=chosen.name;}
+          else{currentTeamId='g2016';currentTeamName='Gutter 2016';}
           userTeams=[{teamId:currentTeamId,teamName:currentTeamName,role:'superadmin'}];
           onUserAccessGranted(name,'superadmin');
         });
@@ -845,7 +870,15 @@ function checkUserApproved(user){
           currentTeamId=t.teamId;currentTeamName=t.teamName;currentUserRole=t.role||'trener';
           onUserAccessGranted(t.name||user.email,currentUserRole);
         }else{
-          showTeamSelectorModal(userTeams,user.email);
+          // Sjekk om sist besøkte lag er tilgjengelig
+          var lastTeam=loadLastTeam();
+          var lastMatch=lastTeam&&userTeams.find(function(t){return t.teamId===lastTeam.id;});
+          if(lastMatch){
+            currentTeamId=lastMatch.teamId;currentTeamName=lastMatch.teamName;currentUserRole=lastMatch.role||'trener';
+            onUserAccessGranted(lastMatch.name||user.email,currentUserRole);
+          }else{
+            showTeamSelectorModal(userTeams,user.email);
+          }
         }
         return;
       }
@@ -883,6 +916,7 @@ function checkUserApproved(user){
 }
 
 function onUserAccessGranted(name,role){
+  saveLastTeam(currentTeamId,currentTeamName);
   document.getElementById('auth-user-name').textContent=name;
   document.getElementById('auth-user-bar').style.display='flex';
   document.getElementById('header-team-name').textContent=currentTeamName||'Fjellhamar FK';
@@ -1328,9 +1362,35 @@ function loadTeamsList(){
     list.innerHTML=html;
   });
 }
+function showTeamSelectorModal(teams, email){
+  var body=document.getElementById('team-selector-body');
+  body.innerHTML=teams.map(function(t){
+    return'<div onclick="selectTeamFromModal(\''+t.teamId+'\',\''+t.teamName.replace(/'/g,"\\'")+'\',\''+t.role+'\',\''+(t.name||'').replace(/'/g,"\\'")+'\')\"' +
+      ' style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;background:white;"'+
+      ' onmouseover="this.style.borderColor=\'var(--green-light)\';this.style.background=\'var(--green-pale)\'"'+
+      ' onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'white\'">'+
+      '<div><div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:14px;">'+t.teamName+'</div>'+
+      '<div style="font-size:12px;color:var(--slate-light);margin-top:2px;">'+(t.role||'trener')+'</div></div>'+
+      '<span style="font-size:20px;color:var(--slate-light);">→</span></div>';
+  }).join('');
+  document.getElementById('team-selector-overlay').style.display='flex';
+}
+
+function selectTeamFromModal(teamId, teamName, role, name){
+  document.getElementById('team-selector-overlay').style.display='none';
+  currentTeamId=teamId;currentTeamName=teamName;currentUserRole=role||'trener';
+  saveLastTeam(teamId,teamName);
+  onUserAccessGranted(name||currentUserEmail,currentUserRole);
+}
+
+function showTeamSelectorModal2(){
+  if(userTeams.length>1) showTeamSelectorModal(userTeams,currentUserEmail);
+}
+
 function switchActiveTeam(btn){
   var id=btn.getAttribute('data-id');var name=btn.getAttribute('data-name');
   currentTeamId=id;currentTeamName=name;
+  saveLastTeam(id,name);
   // Nullstill alt lag-spesifikt — inkludert oppmøte
   allPlayers=[];appHistory=[];
   attendingNames=[];attendingPlayers=[];
@@ -2167,99 +2227,90 @@ function buildRecentPairs(sessionType){
 function pairCost(group,pairs){var c=0;for(var i=0;i<group.length;i++)for(var j=i+1;j<group.length;j++)c+=pairs[[group[i].name,group[j].name].sort().join('|')]||0;return c;}
 
 function generateAdapted(pool,n,rp){
-  var l1=shuffle(pool.filter(function(p){return p.level===1;}));
-  var l2=shuffle(pool.filter(function(p){return p.level===2;}));
-  var l3=shuffle(pool.filter(function(p){return p.level===3;}));
-  var upperCount=Math.floor(n/2),lowerCount=n-upperCount;
+  // Tilpasset modus: n/2 par, sortert fra øverste til nederste nivå
+  // Hvert par (2i, 2i+1) er jevnbyrdige og kan spille mot hverandre
+  // Mål: alle grupper i hvert par er like store, og alle par er så like som mulig totalt
+
+  var nPairs=Math.floor(n/2);
+  var hasOdd=n%2===1; // odde antall grupper — siste gruppe alene
   var total=pool.length;
 
-  // Mål: alle n grupper skal ha så likt antall som mulig totalt
-  // Beregn ideell størrelse per gruppe
-  var idealPerGroup=total/n;
+  // Sorter alle spillere etter nivå (lavt nivå=best øverst)
+  var sorted=pool.slice().sort(function(a,b){return a.level-b.level;});
 
-  // Beregn ideelt antall spillere i øvre sjikt
-  var upperIdeal=Math.round(idealPerGroup*upperCount);
+  // Beregn ideell størrelse per gruppe totalt
+  var baseSize=Math.floor(total/n);
+  var extra=total%n;
+  // Fordel extra til de midtre grupperingene for jevnest mulig par
+  var groupSizes=[];
+  for(var i=0;i<n;i++) groupSizes.push(baseSize+(i<extra?1:0));
 
-  // Sørg for at øvre sjikt gir like store grupper parvis
-  // Med upperCount=2: upperIdeal bør være partall
-  if(upperCount>=2&&upperCount%2===0){
-    if(upperIdeal%upperCount!==0){
-      // Rund til nærmeste multiplum av upperCount
-      upperIdeal=Math.round(upperIdeal/upperCount)*upperCount;
-    }
+  // Sørg for at hvert par har like store grupper
+  // Par i er gruppe (2i) og (2i+1)
+  for(var p=0;p<nPairs;p++){
+    var g1=2*p, g2=2*p+1;
+    var pairTotal=groupSizes[g1]+groupSizes[g2];
+    // Gjør begge like store (rund ned, legg rest i g2)
+    groupSizes[g1]=Math.floor(pairTotal/2);
+    groupSizes[g2]=pairTotal-groupSizes[g1];
   }
 
-  // Sørg for at nedre sjikt også gir like store grupper parvis
-  var lowerIdeal=total-upperIdeal;
-  if(lowerCount>=2&&lowerCount%2===0){
-    if(lowerIdeal%lowerCount!==0){
-      lowerIdeal=Math.round(lowerIdeal/lowerCount)*lowerCount;
-      upperIdeal=total-lowerIdeal;
+  // Fordel spillere i grupper: snake-draft nedover nivå-rangering
+  // Gruppe 0+1 = beste spillere, gruppe 2+3 = midtre, gruppe 4+5 = svakeste
+  var groups=[];
+  for(var i=0;i<n;i++) groups.push([]);
+
+  // Fordel spillere til par-grupper sekvensielt
+  var idx=0;
+  for(var p=0;p<nPairs&&idx<sorted.length;p++){
+    var g1=2*p, g2=2*p+1;
+    var pairPlayers=[];
+    var pairSize=groupSizes[g1]+groupSizes[g2];
+    for(var k=0;k<pairSize&&idx<sorted.length;k++){
+      pairPlayers.push(sorted[idx++]);
     }
+    // Snake-draft innen paret for variasjon
+    pairPlayers=shuffle(pairPlayers.reduce(function(acc,p,i){
+      // Behold nivå-sortering men shuffle innen samme nivå
+      acc.push(p);return acc;
+    },[]));
+    // Fordel jevnt mellom g1 og g2
+    pairPlayers.forEach(function(sp,i){
+      if(groups[g1].length<groupSizes[g1]) groups[g1].push(sp);
+      else groups[g2].push(sp);
+    });
+  }
+  // Evt. siste alene-gruppe
+  if(hasOdd&&idx<sorted.length){
+    while(idx<sorted.length) groups[n-1].push(sorted[idx++]);
   }
 
-  // Klem til gyldige grenser
-  upperIdeal=Math.max(upperCount,Math.min(total-lowerCount,upperIdeal));
-  lowerIdeal=total-upperIdeal;
-
-  // Fordel l2-spillere mellom sjiktene for å nå ideal-antall
-  var upperFromL1=Math.min(l1.length,upperIdeal);
-  var upperFromL2=Math.max(0,upperIdeal-upperFromL1);
-  // Begrens til tilgjengelige l2-spillere
-  upperFromL2=Math.min(upperFromL2,l2.length);
-  upperIdeal=upperFromL1+upperFromL2;
-  lowerIdeal=total-upperIdeal;
-
-  var upperPlayers=l1.concat(l2.slice(0,upperFromL2));
-  var lowerPlayers=l2.slice(upperFromL2).concat(l3);
-
-  // Fordel jevnt med eksakt like store grupper i hvert sjikt
-  function evenDraft(players,ng){
-    var grps=[];for(var k=0;k<ng;k++)grps.push([]);
-    if(!players.length||!ng)return grps;
-    var sorted=players.slice().sort(function(a,b){return a.level-b.level;});
-    var base=Math.floor(sorted.length/ng);
-    var extra=sorted.length%ng;
-    // For parvis balanse: gi extra til siste grupper (ikke første)
-    // slik at grp[0]==grp[1] og grp[2]==grp[3] om mulig
-    var sizes=[];
-    for(var k=0;k<ng;k++){
-      // Fordel extra jevnt: annenhver gruppe får +1
-      sizes.push(base+(k>=ng-extra?1:0));
-    }
-    var idx=0,round=0;
-    while(idx<sorted.length){
-      var forward=round%2===0;
-      for(var pos=0;pos<ng&&idx<sorted.length;pos++){
-        var g=forward?pos:ng-1-pos;
-        if(grps[g].length<sizes[g])grps[g].push(sorted[idx++]);
-      }
-      round++;
-    }
-    return grps;
-  }
-
-  var ug=evenDraft(upperPlayers,upperCount);
-  var lg=evenDraft(lowerPlayers,lowerCount);
-
-  // Variasjon-optimalisering (kun bytt mellom like store grupper)
-  function optimise(tg){
-    var ng=tg.length;if(ng<2)return;
+  // Variasjon-optimalisering innen hvert par
+  for(var p=0;p<nPairs;p++){
+    var g1=2*p, g2=2*p+1;
+    var tg=[groups[g1],groups[g2]];
     for(var s=0;s<120;s++){
-      var t1=Math.floor(Math.random()*ng),t2=Math.floor(Math.random()*ng);
-      if(t1===t2||!tg[t1].length||!tg[t2].length)continue;
-      var i1=Math.floor(Math.random()*tg[t1].length),i2=Math.floor(Math.random()*tg[t2].length);
-      var p1=tg[t1][i1],p2=tg[t2][i2];
-      if(tg[t1].length===tg[t2].length){
-        var before=pairCost(tg[t1],rp)+pairCost(tg[t2],rp);
-        tg[t1][i1]=p2;tg[t2][i2]=p1;
-        if(pairCost(tg[t1],rp)+pairCost(tg[t2],rp)>=before){tg[t1][i1]=p1;tg[t2][i2]=p2;}
+      if(!tg[0].length||!tg[1].length)break;
+      var i1=Math.floor(Math.random()*tg[0].length);
+      var i2=Math.floor(Math.random()*tg[1].length);
+      var p1=tg[0][i1],p2=tg[1][i2];
+      // Bytt kun hvis samme størrelse bevares
+      if(tg[0].length===tg[1].length){
+        var before=pairCost(tg[0],rp)+pairCost(tg[1],rp);
+        tg[0][i1]=p2;tg[1][i2]=p1;
+        if(pairCost(tg[0],rp)+pairCost(tg[1],rp)>=before){tg[0][i1]=p1;tg[1][i2]=p2;}
       }
     }
   }
 
-  optimise(ug);optimise(lg);
-  return ug.concat(lg);
+  // Bland rekkefølgen på parene — øvre nivå er ikke alltid gruppe 1+2
+  var pairs=[];
+  for(var p=0;p<nPairs;p++) pairs.push([groups[2*p],groups[2*p+1]]);
+  pairs=shuffle(pairs);
+  var result=[];
+  pairs.forEach(function(pair){result.push(pair[0]);result.push(pair[1]);});
+  if(hasOdd) result.push(groups[n-1]);
+  return result;
 }
 function generateBalanced(pool,n,rp){
   var groups=[];for(var k=0;k<n;k++)groups.push([]);
@@ -2290,14 +2341,17 @@ function renderResult(session,pending){
   var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
   var tl={trening:'🏃 Trening',seriekamp:'⚽ Seriekamper',cupkamp:'🏆 Cupkamper'};
   document.getElementById('result-meta').textContent=(tl[session.sessionType]||'')+' · '+ml[session.mode]+' · '+session.groups.length+' '+gruppeLabelFlertall(session.sessionType)+' · '+session.groups.flat().length+' spillere';
-  var n=session.groups.length,upperCount=session.mode==='adapted'?Math.floor(n/2):0,html='';
-  var gl=gruppeLabel(session.sessionType, true);
+  var n=session.groups.length,html='';
+  var gl=gruppeLabel(session.sessionType,true);
   session.groups.forEach(function(group,i){
     var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
     var sorted=group.slice().sort(function(a,b){return a.level-b.level;});
-    if(session.mode==='adapted'&&i===0)html+=divider('Øvre nivå');
-    if(session.mode==='adapted'&&i===upperCount&&upperCount>0)html+=divider('Nedre nivå');
-    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?'<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
+    // Vis par-skillelinje mellom hvert par (annenhver gruppe)
+    if(session.mode==='adapted'&&i>0&&i%2===0){
+      html+='<div style="height:6px;"></div>';
+    }
+    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?
+      '<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
     html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
     sorted.forEach(function(p){html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span><span class="lvl-badge lvl-badge-'+p.level+'">Nivå '+p.level+'</span></div>';});
     html+='<div class="stats-bar" style="margin-top:10px;">';
@@ -2307,6 +2361,17 @@ function renderResult(session,pending){
     html+='</div></div></div>';
   });
   document.getElementById('groups-output').innerHTML=html;
+}
+
+function makeTierLabels(nPairs){
+  if(nPairs===1)return['Grupper'];
+  if(nPairs===2)return['\u00d8vre niv\u00e5','Nedre niv\u00e5'];
+  if(nPairs===3)return['\u00d8vre niv\u00e5','Midtre niv\u00e5','Nedre niv\u00e5'];
+  if(nPairs===4)return['\u00d8vre niv\u00e5','Midtre \u00f8vre','Midtre nedre','Nedre niv\u00e5'];
+  // Generisk for 5+
+  var labels=[];
+  for(var i=0;i<nPairs;i++)labels.push('Niv\u00e5gruppe '+(i+1));
+  return labels;
 }
 function divider(label){return'<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:11px;color:var(--slate-light);white-space:nowrap;">'+label+'</span><div style="flex:1;height:1px;background:var(--border);"></div></div>';}
 
