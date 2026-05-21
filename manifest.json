@@ -2,12 +2,19 @@
   "name": "Lagdeling — Fjellhamar FK",
   "short_name": "Lagdeling",
   "description": "Lag gruppeoversikt for treninger og kamper",
-  "start_url": "/fjellhamar-lagdeling/fjellhamar_lagdeling.html",
+  "start_url": "./fjellhamar_lagdeling.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0D1F30",
   "theme_color": "#0D1F30",
   "orientation": "portrait-primary",
+  "lang": "nb",
   "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
     {
       "src": "icon-192.png",
       "sizes": "192x192",
@@ -22,7 +29,7 @@
     }
   ],
   "share_target": {
-    "action": "fjellhamar_lagdeling.html",
+    "action": "./fjellhamar_lagdeling.html",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
