@@ -4,6 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Lagdeling — Fjellhamar FK</title>
+
+<!-- PWA -->
+<meta name="theme-color" content="#0D1F30" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Lagdeling" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="manifest" href="manifest.json" />
+<!-- Apple touch icon (inline base64 for enkel distribusjon) -->
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAABmJLR0QA/wD/AP+gvaeTAAAAB3RJTUUH6AULCgYFJraBVQAABShJREFUeNrt3E1oHGUcx/Hfs9lkk+wmm6RJu7bYtrRSqlAKKh5EFLwI6sFDqScPng0Uj4IHD168eBE8eBE8eBC8eBA8eBDBU6GCiAgVtCg1tRpNbJps8r4z4+HZbDZpk5nN7OzM7vf7gWGZnd15nt/z//3n2WeekQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMJxXAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoA=="/>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -292,6 +303,17 @@
     <button class="auth-signout" onclick="doSignOut()">Logg ut</button>
   </div>
 </div>
+<!-- PWA INSTALL BANNER -->
+<div id="pwa-install-banner" style="display:none;background:var(--gold-pale);border-bottom:1px solid var(--gold);padding:8px 16px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+  <div style="font-size:12px;color:#8a5a00;flex:1;">
+    <strong>📱 Installer appen</strong> — legg til på hjemskjermen for å dele Spond-filer direkte til appen
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button id="pwa-install-btn" class="btn btn-sm btn-gold" onclick="installPWA()" style="font-size:12px;padding:5px 12px;">Installer</button>
+    <button class="btn btn-sm" onclick="dismissInstallBanner()" style="font-size:11px;padding:5px 8px;color:var(--slate-light);">✕</button>
+  </div>
+</div>
+
 <div class="nav-tabs-wrapper">
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="showPage('setup')">Last opp</button>
@@ -2340,9 +2362,95 @@ function showBanner(area,type,msg){
   var el=document.getElementById(id);el.className='banner banner-'+type;el.textContent=msg;el.style.display='block';
 }
 
+// ── PWA INSTALL PROMPT ────────────────────────────────────────
+var deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Vis banner kun hvis ikke avvist tidligere
+  if(!localStorage.getItem('pwa-install-dismissed')){
+    var banner = document.getElementById('pwa-install-banner');
+    if(banner) banner.style.display = 'flex';
+  }
+});
+
+window.addEventListener('appinstalled', function() {
+  deferredInstallPrompt = null;
+  var banner = document.getElementById('pwa-install-banner');
+  if(banner) banner.style.display = 'none';
+});
+
+function installPWA(){
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(function(result){
+      if(result.outcome === 'accepted'){
+        var banner = document.getElementById('pwa-install-banner');
+        if(banner) banner.style.display = 'none';
+      }
+      deferredInstallPrompt = null;
+    });
+  } else {
+    // iOS — gi instruksjoner
+    alert('For å installere på iPhone/iPad:\n\n1. Trykk på Del-ikonet (firkant med pil opp) nederst i Safari\n2. Velg "Legg til på hjemskjerm"\n3. Trykk "Legg til"\n\nEtter installasjon kan du dele Spond-eksport direkte til Lagdeling-appen!');
+  }
+}
+
+function dismissInstallBanner(){
+  var banner = document.getElementById('pwa-install-banner');
+  if(banner) banner.style.display = 'none';
+  localStorage.setItem('pwa-install-dismissed', '1');
+}
+
+// ── PWA SHARE TARGET ──────────────────────────────────────────
+// Håndterer filer delt til appen via iOS/Android Del-funksjon
+function handleSharedFile(){
+  // Sjekk om appen ble åpnet med en delt fil (share_target i manifest)
+  var url=new URL(window.location.href);
+  if(!url.searchParams.has('share-target'))return;
+
+  // Vent til brukeren er logget inn, deretter behandle filen
+  var checkInterval=setInterval(function(){
+    if(currentTeamId){
+      clearInterval(checkInterval);
+      // Naviger til Last opp-siden
+      showPage('setup');
+      setAttendMode('spond');
+      // Vis melding om at vi venter på filen
+      showBanner('spond','warn','Delt fil mottatt — behandler...');
+    }
+  },500);
+}
+
+// Service Worker for PWA og share target
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(function(){
+    console.log('Service Worker registrert');
+  }).catch(function(e){
+    console.warn('Service Worker feil:', e);
+  });
+
+  // Lytt på meldinger fra service worker (delte filer)
+  navigator.serviceWorker.addEventListener('message', function(event){
+    if(event.data&&event.data.type==='shared-file'){
+      var file=event.data.file;
+      if(!file)return;
+      // Naviger til Last opp og behandle som Spond-fil
+      showPage('setup');
+      setAttendMode('spond');
+      // Gi tid til siden å laste, deretter prosesser filen
+      setTimeout(function(){
+        processSpondFile(file);
+      }, 300);
+    }
+  });
+}
+
 // Sett dagens dato og start Firebase
 document.getElementById('session-date').value=new Date().toISOString().split('T')[0];
 initFirebase();
+handleSharedFile();
 </script>
 </body>
 </html>
