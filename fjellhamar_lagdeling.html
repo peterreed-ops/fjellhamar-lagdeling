@@ -398,28 +398,36 @@
     <button class="btn btn-sm" onclick="exportPlayersExcel()">📥 Last ned Excel</button>
   </div>
 
-  <!-- Import fra Excel -->
-  <div class="card" style="margin-bottom:12px;">
-    <div class="card-title">Importer fra Excel</div>
-    <div class="upload-zone" id="zone-levels" onclick="document.getElementById('file-levels').click()" ondragover="dragOver(event,'zone-levels')" ondragleave="dragLeave('zone-levels')" ondrop="dropFile(event,'levels')">
-      <input type="file" id="file-levels" accept=".xlsx,.xls,.csv" onchange="handleLevelsFile(event)" />
-      <div class="upload-icon">📋</div>
-      <div class="upload-title">Last opp nivåoversikt</div>
-      <div class="upload-sub">Excel-fil med navn og nivå (1=best, 3=lavest)</div>
-      <div class="upload-done" id="levels-done" style="display:none;"></div>
-    </div>
-    <div id="banner-levels" class="banner"></div>
-    <div id="levels-saved-row" style="display:none;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-light);">
+  <!-- Import fra Excel — skjult bak knapp -->
+  <div style="margin-bottom:12px;">
+    <div id="levels-saved-row" style="display:none;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);border:1px solid var(--green-light);margin-bottom:8px;">
       <span style="font-size:13px;color:var(--green);font-weight:500;">☁️ Spilleroversikt er lagret og deles med alle brukere</span>
       <button class="btn btn-sm btn-danger" onclick="clearPlayers()">Slett</button>
     </div>
-    <div id="levels-mapper" style="display:none;margin-top:12px;">
-      <div class="col-map-grid">
-        <div><label>Navnekolonne</label><select id="col-name" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
-        <div><label>Nivåkolonne</label><select id="col-level" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+    <button class="btn btn-sm" onclick="toggleImportPanel()" id="btn-toggle-import" style="width:100%;justify-content:center;border-style:dashed;">
+      📋 Last opp ny nivåoversikt fra Excel
+    </button>
+    <div id="import-panel" style="display:none;margin-top:8px;" class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="card-title" style="margin:0;">Importer fra Excel</div>
+        <button class="btn btn-sm" onclick="toggleImportPanel()" style="padding:3px 8px;font-size:12px;">✕ Lukk</button>
       </div>
-      <div id="levels-preview"></div>
-      <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmLevels()">✓ Bekreft import</button></div>
+      <div class="upload-zone" id="zone-levels" onclick="document.getElementById('file-levels').click()" ondragover="dragOver(event,'zone-levels')" ondragleave="dragLeave('zone-levels')" ondrop="dropFile(event,'levels')">
+        <input type="file" id="file-levels" accept=".xlsx,.xls,.csv" onchange="handleLevelsFile(event)" />
+        <div class="upload-icon">📋</div>
+        <div class="upload-title">Last opp nivåoversikt</div>
+        <div class="upload-sub">Excel-fil med navn og nivå (1=best, 3=lavest)</div>
+        <div class="upload-done" id="levels-done" style="display:none;"></div>
+      </div>
+      <div id="banner-levels" class="banner"></div>
+      <div id="levels-mapper" style="display:none;margin-top:12px;">
+        <div class="col-map-grid">
+          <div><label>Navnekolonne</label><select id="col-name" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+          <div><label>Nivåkolonne</label><select id="col-level" onchange="updateLevelsPreview()" style="width:100%;"></select></div>
+        </div>
+        <div id="levels-preview"></div>
+        <div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmLevels()">✓ Bekreft import</button></div>
+      </div>
     </div>
   </div>
 
@@ -678,6 +686,22 @@
     <div class="modal-actions">
       <button class="btn btn-gold" onclick="addSuperadmin()">👑 Gi superadmin-tilgang</button>
       <button class="btn" onclick="closeSuperadminModal()">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- UNMATCHED PLAYERS MODAL -->
+<div class="modal-overlay" id="unmatched-modal">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-topbar">
+      <span class="modal-topbar-title">⚠️ Nye spillere på oppmøtelisten</span>
+    </div>
+    <div style="padding:1.25rem;max-height:60vh;overflow-y:auto;">
+      <div id="unmatched-modal-body"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmUnmatched()">✓ Legg til valgte og fortsett</button>
+      <button class="btn" onclick="skipUnmatched()">Hopp over alle</button>
     </div>
   </div>
 </div>
@@ -1748,6 +1772,14 @@ function dropFile(e,type){
   else processAttendFile(file);
 }
 
+function toggleImportPanel(){
+  var panel=document.getElementById('import-panel');
+  var btn=document.getElementById('btn-toggle-import');
+  var open=panel.style.display==='none';
+  panel.style.display=open?'block':'none';
+  btn.style.display=open?'none':'flex';
+}
+
 function handleLevelsFile(e){processLevelsFile(e.target.files[0]);}
 function processLevelsFile(file){
   if(!file)return;
@@ -1783,6 +1815,8 @@ function confirmLevels(){
   document.getElementById('levels-done').style.display='block';
   document.getElementById('levels-saved-row').style.display='flex';
   logChange('Excel-import', ok+' spillere lastet inn fra Excel-fil');
+  var panel=document.getElementById('import-panel');var btn=document.getElementById('btn-toggle-import');
+  if(panel)panel.style.display='none';if(btn)btn.style.display='flex';
   tryMatchAttending();updateSetupSummary();
 }
 
@@ -1899,8 +1933,62 @@ function confirmAttend(){
 function tryMatchAttending(){
   if(!allPlayers.length||!attendingNames.length)return;
   attendingPlayers=[];var unmatched=[];
-  attendingNames.forEach(function(name){var p=findPlayer(name);if(p)attendingPlayers.push({name:name,level:p.level});else unmatched.push(name);});
-  if(unmatched.length)showBanner('attend','warn',attendingPlayers.length+' matchet, '+unmatched.length+' ikke funnet: '+unmatched.slice(0,3).join(', ')+(unmatched.length>3?'…':''));
+  attendingNames.forEach(function(name){
+    var p=findPlayer(name);
+    if(p)attendingPlayers.push({name:name,level:p.level});
+    else unmatched.push(name);
+  });
+  if(unmatched.length){
+    showUnmatchedModal(unmatched);
+  } else {
+    updateSetupSummary();
+  }
+}
+
+function showUnmatchedModal(unmatched){
+  var body=document.getElementById('unmatched-modal-body');
+  var html='<p style="font-size:13px;color:var(--slate-light);margin-bottom:14px;">'+
+    unmatched.length+' person(er) på oppmøtelisten finnes ikke i spilleroversikten. '+
+    'Angi nivå for å ta dem med i gruppen, eller hopp over dem.</p>';
+  unmatched.forEach(function(name,i){
+    html+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'+
+      '<span style="flex:1;font-size:14px;font-weight:500;color:var(--slate);">'+name+'</span>'+
+      '<select id="unmatched-level-'+i+'" style="font-size:13px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;">'+
+        '<option value="skip">— Hopp over —</option>'+
+        '<option value="1">Nivå 1 — Mest øvede</option>'+
+        '<option value="2">Nivå 2 — Middels</option>'+
+        '<option value="3">Nivå 3 — Minst øvede</option>'+
+      '</select>'+
+    '</div>';
+  });
+  body.innerHTML=html;
+  body.setAttribute('data-names',JSON.stringify(unmatched));
+  document.getElementById('unmatched-modal').classList.add('open');
+}
+
+function confirmUnmatched(){
+  var body=document.getElementById('unmatched-modal-body');
+  var names=JSON.parse(body.getAttribute('data-names')||'[]');
+  var added=0;
+  names.forEach(function(name,i){
+    var sel=document.getElementById('unmatched-level-'+i);
+    if(!sel||sel.value==='skip')return;
+    var level=+sel.value;
+    attendingPlayers.push({name:name,level:level});
+    // Legg også til i spilleroversikten permanent
+    if(!allPlayers.find(function(p){return p.name.toLowerCase()===name.toLowerCase();})){
+      allPlayers.push({name:name,level:level});
+    }
+    added++;
+  });
+  if(added>0){savePlayers();logChange('Lagt til via oppm\u00f8te',added+' nye spillere lagt til fra oppm\u00f8teliste');}
+  document.getElementById('unmatched-modal').classList.remove('open');
+  updateSetupSummary();
+}
+
+function skipUnmatched(){
+  document.getElementById('unmatched-modal').classList.remove('open');
+  updateSetupSummary();
 }
 function findPlayer(name){
   var n=name.trim().toLowerCase();
