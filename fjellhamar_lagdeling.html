@@ -254,6 +254,9 @@
         <div class="auth-field"><label>E-post</label><input type="email" id="login-email" placeholder="din@epost.no" /></div>
         <div class="auth-field"><label>Passord</label><input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
         <button class="auth-btn" onclick="doLogin()">Logg inn</button>
+        <div style="text-align:center;margin-top:12px;">
+          <button onclick="doForgotPassword()" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:12px;cursor:pointer;text-decoration:underline;font-family:'DM Sans',sans-serif;">Glemt passord?</button>
+        </div>
       </div>
 
       <!-- REGISTER -->
@@ -300,6 +303,7 @@
   <div class="auth-user-bar" id="auth-user-bar" style="display:none;">
     <span id="team-switch-btn" style="display:none;font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;" onclick="showTeamSelectorModal2()">⇄ Bytt lag</span>
     <span class="auth-user-name" id="auth-user-name"></span>
+    <button class="auth-signout" onclick="resetOwnPassword()" title="Endre passord">🔑</button>
     <button class="auth-signout" onclick="doSignOut()">Logg ut</button>
   </div>
 </div>
@@ -961,6 +965,41 @@ function doLogin(){
     showAuthMsg(msg,'error');
   });
 }
+function doForgotPassword(){
+  var email=document.getElementById('login-email').value.trim();
+  if(!email){
+    showAuthMsg('Skriv inn e-postadressen din i feltet over, s\u00e5 sender vi en reset-lenke.','pending');
+    document.getElementById('login-email').focus();
+    return;
+  }
+  fbAuth.sendPasswordResetEmail(email).then(function(){
+    showAuthMsg('\u2705 E-post med reset-lenke er sendt til '+email+'.\n\nSjekk innboksen (og ev. spam-mappen).','success');
+  }).catch(function(err){
+    var msg='Kunne ikke sende reset-e-post.';
+    if(err.code==='auth/user-not-found')msg='Ingen konto registrert med denne e-postadressen.';
+    if(err.code==='auth/invalid-email')msg='Ugyldig e-postadresse.';
+    showAuthMsg(msg,'error');
+  });
+}
+
+function resetOwnPassword(){
+  if(!currentUserEmail){alert('Ikke logget inn.');return;}
+  if(!confirm('Send reset-lenke til '+currentUserEmail+'?\n\nDu vil motta en e-post med lenke for \u00e5 sette nytt passord.'))return;
+  fbAuth.sendPasswordResetEmail(currentUserEmail).then(function(){
+    alert('\u2705 Reset-lenke sendt til '+currentUserEmail+'!\n\nSjekk innboksen og f\u00f8lg instruksjonene der.');
+  }).catch(function(err){
+    alert('Feil: '+err.message);
+  });
+}
+
+function sendPasswordResetToUser(email, name){
+  if(!confirm('Send reset-lenke til '+name+' ('+email+')?\n\nDe vil motta en e-post med lenke for \u00e5 sette nytt passord.'))return;
+  fbAuth.sendPasswordResetEmail(email).then(function(){
+    alert('\u2705 Reset-lenke sendt til '+email+'!');
+  }).catch(function(err){
+    alert('Feil: '+err.message);
+  });
+}
 function doRegister(){
   var name=document.getElementById('reg-name').value.trim();
   var email=document.getElementById('reg-email').value.trim();
@@ -1000,10 +1039,7 @@ function doRegister(){
     })
     .then(function(){
       btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-      showAuthMsg(
-        '\u2705 Foresp\u00f8rselen er sendt!\n\nAdmin vil godkjenne deg. Du f\u00e5r da logge inn med e-post: '+email,
-        'success'
-      );
+      showAuthMsg('\u2705 Foresp\u00f8rselen er sendt!\n\nAdmin vil godkjenne deg. Du f\u00e5r da logge inn med e-post: '+email,'success');
       document.getElementById('reg-name').value='';
       document.getElementById('reg-email').value='';
       document.getElementById('reg-password').value='';
@@ -1012,8 +1048,8 @@ function doRegister(){
       document.getElementById('reg-team-custom-wrap').style.display='none';
     })
     .catch(function(err){
-      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-      var msg='Noe gikk galt. Pr\u00f8v igjen.';
+      btn.disabled=false;btn.textContent='Send forespørsel';
+      var msg='Noe gikk galt. Prøv igjen.';
       if(err.code==='auth/email-already-in-use')
         msg='Det finnes allerede en konto med denne e-posten. Har du allerede sendt foresp\u00f8rsel? Pr\u00f8v \u00e5 logge inn, eller kontakt admin.';
       else if(err.code==='auth/invalid-email')
@@ -1026,7 +1062,6 @@ function doRegister(){
     });
 }
 function doSignOut(){
-  if(fbAuth)fbAuth.signOut();
   currentUserEmail='';currentUserRole='';currentTeamId='';currentTeamName='';userTeams=[];
   allPlayers=[];appHistory=[];attendingNames=[];attendingPlayers=[];
   document.getElementById('auth-user-bar').style.display='none';
@@ -1696,10 +1731,11 @@ function loadAllUsers(){
           (isSuperAdminEntry?
             '<span class="user-role user-role-superadmin">superadmin</span>':
             !isMe?
-              '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:6px;">'+
+              '<select onchange="changeUserRole(\''+safeDid+'\',\''+safeName+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:white;margin-right:4px;">'+
                 '<option value="trener"'+(role==='trener'?' selected':'')+'>Trener</option>'+
                 '<option value="lagadmin"'+(role==='lagadmin'?' selected':'')+'>Lagadmin</option>'+
               '</select>'+
+              '<button class="btn btn-sm" title="Send passord-reset til '+displayName+'" onclick="sendPasswordResetToUser(\''+d.email.replace(/'/g,"\\'")+'\',\''+safeName+'\')" style="padding:4px 8px;font-size:13px;margin-right:4px;">🔑</button>'+
               '<button class="btn btn-danger btn-sm" onclick="revokeAccessGlobal(\''+safeDid+'\',\''+safeName+'\',\''+team.name.replace(/'/g,"\\'")+'\')">Fjern</button>':
               '<span class="user-role user-role-'+role+'">'+role+'</span>'+
               '<span style="font-size:11px;color:var(--slate-light);margin-left:6px;">deg selv</span>'
