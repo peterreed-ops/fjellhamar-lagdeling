@@ -926,6 +926,8 @@ function onUserAccessGranted(name,role){
   if(userTeams.length>1){
     document.getElementById('team-switch-btn').style.display='inline-block';
   }
+  // Vis/skjul admin-only elementer på spillersiden
+  updatePlayersPageForRole(role);
   showAuthOverlay(false);
   loadFromFirestore(function(){
     document.getElementById('session-date').value=new Date().toISOString().split('T')[0];
@@ -2078,34 +2080,73 @@ function clearPlayers(){
   attendingPlayers=[];updateSetupSummary();
 }
 
+function updatePlayersPageForRole(role){
+  var isAdmin=role==='lagadmin'||role==='superadmin';
+  // Import-panel og knapp
+  var btnToggle=document.getElementById('btn-toggle-import');
+  if(btnToggle)btnToggle.style.display=isAdmin?'flex':'none';
+  // Legg til spiller-kortets
+  var addCard=document.querySelector('#page-players .card');
+  if(addCard)addCard.style.display=isAdmin?'block':'none';
+  // Last ned Excel
+  var excelBtn=document.querySelector('[onclick="exportPlayersExcel()"]');
+  if(excelBtn)excelBtn.style.display=isAdmin?'':'none';
+  // Nivå-legend
+  var legend=document.querySelector('#page-players .legend');
+  if(legend)legend.style.display=isAdmin?'flex':'none';
+  // Lagret-rad (import-status)
+  var savedRow=document.getElementById('levels-saved-row');
+  if(savedRow&&!isAdmin)savedRow.style.display='none';
+}
+
+function canEditLevels(){
+  return currentUserRole==='lagadmin'||currentUserRole==='superadmin';
+}
+
 function renderPlayersList(){
   var container=document.getElementById('players-list-container');
+  var isAdmin=canEditLevels();
   if(!allPlayers.length){container.innerHTML='<div class="empty"><div class="empty-icon">👥</div>Ingen spillere lastet inn ennå.</div>';return;}
   var sorted=allPlayers.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
   var counts=[0,0,0,0];allPlayers.forEach(function(p){counts[p.level]++;});
+
   var html='<div class="stats-bar" style="margin-bottom:12px;">'+
-    '<span class="stat-chip">👥 '+allPlayers.length+' spillere totalt</span>'+
-    '<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+counts[1]+'</span>'+
-    '<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+counts[2]+'</span>'+
-    '<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+counts[3]+'</span>'+
-    '</div>';
-  var lvlLabels={1:'Nivå 1 — Mest øvede',2:'Nivå 2 — Middels',3:'Nivå 3 — Minst øvede'};
-  var curLevel=0;
-  sorted.forEach(function(p){
-    var idx=allPlayers.indexOf(p);
-    if(p.level!==curLevel){if(curLevel)html+='</div>';curLevel=p.level;html+='<div class="section-divider">'+lvlLabels[p.level]+' ('+counts[p.level]+')</div><div>';}
-    html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
-      '<span style="display:flex;align-items:center;gap:8px;flex:1;"><span class="lvl-dot lvl-dot-'+p.level+'"></span><span style="font-size:14px;">'+p.name+'</span></span>'+
-      '<span style="display:flex;align-items:center;gap:6px;">'+
-      '<select onchange="changePlayerLevel('+idx+',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:white;">'+
-      '<option value="1"'+(p.level==1?' selected':'')+'>Nivå 1</option>'+
-      '<option value="2"'+(p.level==2?' selected':'')+'>Nivå 2</option>'+
-      '<option value="3"'+(p.level==3?' selected':'')+'>Nivå 3</option>'+
-      '</select>'+
-      '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
-      '</span></div>';
-  });
-  if(curLevel)html+='</div>';
+    '<span class="stat-chip">👥 '+allPlayers.length+' spillere totalt</span>';
+  if(isAdmin){
+    html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+counts[1]+'</span>'+
+      '<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+counts[2]+'</span>'+
+      '<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+counts[3]+'</span>';
+  }
+  html+='</div>';
+
+  if(isAdmin){
+    // Admin: vis gruppert etter nivå med nivå-badge og redigering
+    var lvlLabels={1:'Nivå 1 — Mest øvede',2:'Nivå 2 — Middels',3:'Nivå 3 — Minst øvede'};
+    var curLevel=0;
+    sorted.forEach(function(p){
+      var idx=allPlayers.indexOf(p);
+      if(p.level!==curLevel){if(curLevel)html+='</div>';curLevel=p.level;html+='<div class="section-divider">'+lvlLabels[p.level]+' ('+counts[p.level]+')</div><div>';}
+      html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
+        '<span style="display:flex;align-items:center;gap:8px;flex:1;"><span class="lvl-dot lvl-dot-'+p.level+'"></span><span style="font-size:14px;">'+p.name+'</span></span>'+
+        '<span style="display:flex;align-items:center;gap:6px;">'+
+        '<select onchange="changePlayerLevel('+idx+',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:white;">'+
+        '<option value="1"'+(p.level==1?' selected':'')+'>Nivå 1</option>'+
+        '<option value="2"'+(p.level==2?' selected':'')+'>Nivå 2</option>'+
+        '<option value="3"'+(p.level==3?' selected':'')+'>Nivå 3</option>'+
+        '</select>'+
+        '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
+        '</span></div>';
+    });
+    if(curLevel)html+='</div>';
+  } else {
+    // Trener: kun navn, alfabetisk, ingen nivå-info
+    var alpha=allPlayers.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
+    alpha.forEach(function(p){
+      html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
+        '<span style="font-size:14px;">'+p.name+'</span>'+
+      '</div>';
+    });
+  }
   container.innerHTML=html;
 }
 function addPlayerManual(){
@@ -2353,7 +2394,10 @@ function renderResult(session,pending){
     var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?
       '<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
     html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
-    sorted.forEach(function(p){html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span><span class="lvl-badge lvl-badge-'+p.level+'">Nivå '+p.level+'</span></div>';});
+    sorted.forEach(function(p){
+      var lvlBadge=canEditLevels()?'<span class="lvl-badge lvl-badge-'+p.level+'">Niv\u00e5 '+p.level+'</span>':'';
+      html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span>'+lvlBadge+'</div>';
+    });
     html+='<div class="stats-bar" style="margin-top:10px;">';
     if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
     if(c[2])html+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">'+c[2]+'&#xD7; N2</span>';
