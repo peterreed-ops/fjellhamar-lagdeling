@@ -442,17 +442,20 @@
     </div>
   </div>
 
-  <!-- Legg til manuelt -->
-  <div class="card" style="margin-bottom:12px;">
+  <!-- Legg til manuelt — tilgjengelig for alle, men nivå kun for lagadmin/superadmin -->
+  <div class="card" id="add-player-card" style="margin-bottom:12px;">
     <div class="card-title">Legg til spiller</div>
     <div class="form-row">
       <input type="text" id="new-player-name" class="flex-1" placeholder="Navn" onkeydown="if(event.key==='Enter')addPlayerManual()" />
-      <select id="new-player-level">
+      <select id="new-player-level" style="display:none;">
         <option value="1">Nivå 1 — Best</option>
         <option value="2" selected>Nivå 2 — Middels</option>
         <option value="3">Nivå 3 — Lavest</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="addPlayerManual()">+ Legg til</button>
+    </div>
+    <div id="add-player-trener-note" style="display:none;font-size:12px;color:var(--slate-light);margin-top:6px;">
+      Spilleren legges til uten nivå. Lagadmin tildeler nivå senere.
     </div>
   </div>
 
@@ -2082,19 +2085,21 @@ function clearPlayers(){
 
 function updatePlayersPageForRole(role){
   var isAdmin=role==='lagadmin'||role==='superadmin';
-  // Import-panel og knapp
+  // Import-panel og knapp — kun admin
   var btnToggle=document.getElementById('btn-toggle-import');
   if(btnToggle)btnToggle.style.display=isAdmin?'flex':'none';
-  // Legg til spiller-kortets
-  var addCard=document.querySelector('#page-players .card');
-  if(addCard)addCard.style.display=isAdmin?'block':'none';
-  // Last ned Excel
+  // Legg til spiller — alle kan se, men nivå-dropdown kun for admin
+  var lvlSel=document.getElementById('new-player-level');
+  if(lvlSel)lvlSel.style.display=isAdmin?'':'none';
+  var trenerNote=document.getElementById('add-player-trener-note');
+  if(trenerNote)trenerNote.style.display=isAdmin?'none':'block';
+  // Last ned Excel — kun admin
   var excelBtn=document.querySelector('[onclick="exportPlayersExcel()"]');
   if(excelBtn)excelBtn.style.display=isAdmin?'':'none';
-  // Nivå-legend
+  // Nivå-legend — kun admin
   var legend=document.querySelector('#page-players .legend');
   if(legend)legend.style.display=isAdmin?'flex':'none';
-  // Lagret-rad (import-status)
+  // Lagret-rad — kun admin
   var savedRow=document.getElementById('levels-saved-row');
   if(savedRow&&!isAdmin)savedRow.style.display='none';
 }
@@ -2121,9 +2126,28 @@ function renderPlayersList(){
 
   if(isAdmin){
     // Admin: vis gruppert etter nivå med nivå-badge og redigering
+    // Spillere uten nivå (level=0) vises separat
+    var noLevel=sorted.filter(function(p){return !p.level||p.level<1||p.level>3;});
+    var withLevel=sorted.filter(function(p){return p.level>=1&&p.level<=3;});
+    if(noLevel.length){
+      html+='<div class="section-divider" style="color:var(--danger);">Ikke tildelt nivå ('+noLevel.length+')</div><div>';
+      noLevel.forEach(function(p){
+        var idx=allPlayers.indexOf(p);
+        html+='<div class="player-row" style="background:#fdf2f2;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid #f5c6c2;">'+
+          '<span style="display:flex;align-items:center;gap:8px;flex:1;"><span style="width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block;"></span><span style="font-size:14px;">'+p.name+'</span></span>'+
+          '<span style="display:flex;align-items:center;gap:6px;">'+
+          '<select onchange="changePlayerLevel('+idx+',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:white;">'+
+          '<option value="0" selected>— Velg nivå —</option>'+
+          '<option value="1">Nivå 1</option><option value="2">Nivå 2</option><option value="3">Nivå 3</option>'+
+          '</select>'+
+          '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
+          '</span></div>';
+      });
+      html+='</div>';
+    }
     var lvlLabels={1:'Nivå 1 — Mest øvede',2:'Nivå 2 — Middels',3:'Nivå 3 — Minst øvede'};
     var curLevel=0;
-    sorted.forEach(function(p){
+    withLevel.forEach(function(p){
       var idx=allPlayers.indexOf(p);
       if(p.level!==curLevel){if(curLevel)html+='</div>';curLevel=p.level;html+='<div class="section-divider">'+lvlLabels[p.level]+' ('+counts[p.level]+')</div><div>';}
       html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
@@ -2150,11 +2174,22 @@ function renderPlayersList(){
   container.innerHTML=html;
 }
 function addPlayerManual(){
-  var nameEl=document.getElementById('new-player-name');var name=nameEl.value.trim();var level=+document.getElementById('new-player-level').value;
+  var nameEl=document.getElementById('new-player-name');
+  var name=nameEl.value.trim();
   if(!name)return;
-  if(allPlayers.find(function(p){return p.name.toLowerCase()===name.toLowerCase();})){alert('Spilleren finnes allerede.');return;}
-  allPlayers.push({name:name,level:level});savePlayers();nameEl.value='';
-  logChange('Lagt til', name+' (Nivå '+level+')');
+  if(allPlayers.find(function(p){return p.name.toLowerCase()===name.toLowerCase();})){
+    alert('Spilleren finnes allerede.');return;
+  }
+  var isAdmin=canEditLevels();
+  // Trenere legger til uten nivå (level=0 = ikke tildelt), admins velger nivå
+  var level=isAdmin?+document.getElementById('new-player-level').value:0;
+  allPlayers.push({name:name,level:level});
+  savePlayers();nameEl.value='';
+  if(isAdmin){
+    logChange('Lagt til',name+' (Niv\u00e5 '+level+')');
+  } else {
+    logChange('Lagt til',name+' (uten niv\u00e5 — tildeles av lagadmin)');
+  }
   renderPlayersList();updateSetupSummary();
 }
 function changePlayerLevel(idx,lvl){
