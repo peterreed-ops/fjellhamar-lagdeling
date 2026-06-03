@@ -676,6 +676,21 @@
 
 </div>
 <!-- SUPERADMIN MODAL -->
+<!-- APPROVE TEAM MODAL -->
+<div class="modal-overlay" id="approve-team-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-topbar">
+      <span class="modal-topbar-title" id="approve-team-modal-name">Godkjenn bruker</span>
+      <button class="modal-close" onclick="document.getElementById('approve-team-modal').classList.remove('open')">&#x2715;</button>
+    </div>
+    <div id="approve-team-modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="approve-team-confirm-btn">✓ Godkjenn</button>
+      <button class="btn" onclick="document.getElementById('approve-team-modal').classList.remove('open')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="superadmin-modal" onclick="closeSuperadminModalOutside(event)">
   <div class="modal-box" style="max-width:460px;">
     <div class="modal-topbar" style="background:var(--slate);border-bottom:2px solid var(--gold);">
@@ -1488,16 +1503,55 @@ function rejectFromCache(docId){
 }
 
 function approveRequest(docId,name,email,teamId,teamName,passwordHint){
-  if(!confirm('Godkjenne '+name+' til laget "'+teamName+'"?'))return;
-  // Auth-bruker ble opprettet av brukeren selv ved registrering
-  // Vi legger kun til i team_members for å gi tilgang
+  var knownTeam=availableTeams.find(function(t){return t.id===teamId;});
+  if(teamId==='__new__'||teamId==='ukjent'||!knownTeam){
+    // Ukjent lag — vis modal for å velge riktig lag
+    showApproveWithTeamModal(docId,name,email,teamName);
+    return;
+  }
+  doApprove(docId,name,email,teamId,teamName);
+}
+
+function showApproveWithTeamModal(docId,name,email,requestedTeamName){
+  var opts=availableTeams.map(function(t){
+    return'<option value="'+t.id+'">'+t.name+'</option>';
+  }).join('');
+  var html=
+    '<div style="padding:1.25rem;">'+
+    '<div style="font-size:13px;color:var(--slate-light);margin-bottom:14px;">'+
+      '<strong>'+name+'</strong> ba om tilgang til: <em>"'+requestedTeamName+'"</em><br>'+
+      '<span style="color:var(--danger);font-size:12px;">Dette laget finnes ikke i systemet. Velg riktig lag:</span>'+
+    '</div>'+
+    '<div class="auth-field"><label>Knytt til lag</label>'+
+    '<select id="approve-team-select" style="width:100%;">'+opts+'</select></div>'+
+    '<div class="auth-field"><label>Rolle</label>'+
+    '<select id="approve-role-select" style="width:100%;"><option value="trener">Trener</option><option value="lagadmin">Lagadmin</option></select></div>'+
+    '</div>';
+  var modal=document.getElementById('approve-team-modal');
+  document.getElementById('approve-team-modal-body').innerHTML=html;
+  document.getElementById('approve-team-modal-name').textContent='Godkjenn '+name;
+  document.getElementById('approve-team-confirm-btn').onclick=function(){
+    var sel=document.getElementById('approve-team-select');
+    var roleSel=document.getElementById('approve-role-select');
+    var tid=sel.value;
+    var tnm=sel.options[sel.selectedIndex].text;
+    var role=roleSel.value;
+    modal.classList.remove('open');
+    doApprove(docId,name,email,tid,tnm,role);
+  };
+  modal.classList.add('open');
+}
+
+function doApprove(docId,name,email,teamId,teamName,role){
+  role=role||'trener';
+  if(!confirm('Godkjenne '+name+' til laget "'+teamName+'" som '+role+'?'))return;
   fbDb.collection('team_members').add({
     email:email,name:name,teamId:teamId,teamName:teamName,
-    role:'trener',approved:new Date().toISOString()
+    role:role,approved:new Date().toISOString()
   }).then(function(){
     return fbDb.collection('access_requests').doc(docId).update({status:'godkjent'});
   }).then(function(){
-    alert(name+' er godkjent og kan n\u00e5 logge inn p\u00e5 laget "'+teamName+'"!');
+    alert('\u2705 '+name+' er godkjent og kan n\u00e5 logge inn p\u00e5 laget "'+teamName+'"!');
     loadAdminRequests();loadAllUsers();
     if(typeof loadAllRequests==='function')loadAllRequests();
   }).catch(function(err){
