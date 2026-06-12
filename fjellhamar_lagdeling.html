@@ -2234,6 +2234,7 @@ function renderPlayersList(){
           '<option value="0" selected>— Velg nivå —</option>'+
           '<option value="1">Nivå 1</option><option value="2">Nivå 2</option><option value="3">Nivå 3</option>'+
           '</select>'+
+          '<button class="btn btn-sm" onclick="renamePlayer('+idx+')" title="Endre navn">✏️</button>'+
           '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
           '</span></div>';
       });
@@ -2252,6 +2253,7 @@ function renderPlayersList(){
         '<option value="2"'+(p.level==2?' selected':'')+'>Nivå 2</option>'+
         '<option value="3"'+(p.level==3?' selected':'')+'>Nivå 3</option>'+
         '</select>'+
+        '<button class="btn btn-sm" onclick="renamePlayer('+idx+')" title="Endre navn">✏️</button>'+
         '<button class="btn btn-danger btn-sm" onclick="removePlayer('+idx+')">Fjern</button>'+
         '</span></div>';
     });
@@ -2260,8 +2262,10 @@ function renderPlayersList(){
     // Trener: kun navn, alfabetisk, ingen nivå-info
     var alpha=allPlayers.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
     alpha.forEach(function(p){
-      html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);">'+
+      var idx=allPlayers.indexOf(p);
+      html+='<div class="player-row" style="background:white;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">'+
         '<span style="font-size:14px;">'+p.name+'</span>'+
+        '<button class="btn btn-sm" onclick="renamePlayer('+idx+')" title="Endre navn">✏️</button>'+
       '</div>';
     });
   }
@@ -2286,6 +2290,24 @@ function addPlayerManual(){
   }
   renderPlayersList();updateSetupSummary();
 }
+function renamePlayer(idx){
+  var player=allPlayers[idx];
+  if(!player)return;
+  var newName=prompt('Endre navn på "'+player.name+'":', player.name);
+  if(newName===null)return; // avbrutt
+  newName=newName.trim();
+  if(!newName){alert('Navn kan ikke være tomt.');return;}
+  if(newName===player.name)return; // ingen endring
+  if(allPlayers.find(function(p,i){return i!==idx&&p.name.toLowerCase()===newName.toLowerCase();})){
+    alert('"'+newName+'" finnes allerede i spilleroversikten.');return;
+  }
+  var oldName=player.name;
+  allPlayers[idx].name=newName;
+  savePlayers();
+  logChange('Navn endret','"'+oldName+'" \u2192 "'+newName+'"');
+  renderPlayersList();
+}
+
 function changePlayerLevel(idx,lvl){
   var oldLvl=allPlayers[idx].level;
   var name=allPlayers[idx].name;
@@ -2524,15 +2546,10 @@ function renderResult(session,pending){
       '<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
     html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
     sorted.forEach(function(p){
-      if(canEditLevels()){
-        var lvlBadge='<span class="lvl-badge lvl-badge-'+p.level+'">Niv\u00e5 '+p.level+'</span>';
-        html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span>'+lvlBadge+'</div>';
-      } else {
-        html+='<div class="player-row"><span>'+p.name+'</span></div>';
-      }
+      html+='<div class="player-row"><span>'+p.name+'</span></div>';
     });
     html+='<div class="stats-bar" style="margin-top:10px;">';
-    if(canEditLevels()){
+    if(canEditLevels()&&(c[1]||c[2]||c[3])){
       if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
       if(c[2])html+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">'+c[2]+'&#xD7; N2</span>';
       if(c[3])html+='<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">'+c[3]+'&#xD7; N3</span>';
@@ -2556,17 +2573,23 @@ function makeTierLabels(nPairs){
 }
 function divider(label){return'<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:11px;color:var(--slate-light);white-space:nowrap;">'+label+'</span><div style="flex:1;height:1px;background:var(--border);"></div></div>';}
 
-function exportExcel(){
-  if(!sessionGroups)return;
+function exportExcel(session){
+  var s=session||sessionGroups;
+  if(!s)return;
   var wb=XLSX.utils.book_new();
   var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
-  var titleText=(tl[sessionGroups.sessionType]||'')+' · '+sessionGroups.name;
-  var rows=[[titleText],[],['Navn','Nivå  \u2190 slett denne kolonnen f\u00f8r deling']];
+  var showLevel=canEditLevels();
+  var titleText=(tl[s.sessionType]||'')+' \u00b7 '+s.name;
+  var headerRow=showLevel?['Navn','Niv\u00e5  \u2190 slett f\u00f8r deling']:['Navn'];
+  var rows=[[titleText],[],headerRow];
   var playerRows=[],groupHeaderRows=[],rowIdx=3;
-  var gl=gruppeLabel(sessionGroups.sessionType,true);
-  sessionGroups.groups.forEach(function(g,i){
+  var gl=gruppeLabel(s.sessionType,true);
+  s.groups.forEach(function(g,i){
     rows.push([gl+' '+(i+1)]);groupHeaderRows.push(rowIdx);rowIdx++;
-    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){rows.push([p.name,'Niv\u00e5 '+p.level]);playerRows.push({r:rowIdx});rowIdx++;});
+    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){
+      rows.push(showLevel?[p.name,'Niv\u00e5 '+p.level]:[p.name]);
+      playerRows.push({r:rowIdx});rowIdx++;
+    });
     rows.push([]);rowIdx++;
   });
   var ws=XLSX.utils.aoa_to_sheet(rows);
@@ -2577,12 +2600,16 @@ function exportExcel(){
   var left={horizontal:'left',vertical:'center'},ctr={horizontal:'center',vertical:'center'};
   sc('A1',{bold:true,color:{rgb:'FFFFFF'},sz:12},hFill,left);
   sc('A3',{bold:true,color:{rgb:'FFFFFF'},sz:10},{patternType:'solid',fgColor:{rgb:'2E75B6'}},ctr);
-  sc('B3',{bold:true,sz:10},yelFill,ctr);
-  groupHeaderRows.forEach(function(r){var ref='A'+(r+1);if(ws[ref])ws[ref].s={font:{bold:true,sz:10},fill:subFill,alignment:left};var rb='B'+(r+1);if(!ws[rb])ws[rb]={t:'s',v:''};ws[rb].s={fill:subFill};});
-  playerRows.forEach(function(pr){var rb='B'+(pr.r+1);if(ws[rb])ws[rb].s={font:{sz:10},fill:yelFill,alignment:ctr};});
-  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}}];ws['!cols']=[{wch:34},{wch:32}];
+  if(showLevel)sc('B3',{bold:true,sz:10},yelFill,ctr);
+  groupHeaderRows.forEach(function(r){
+    var ref='A'+(r+1);if(ws[ref])ws[ref].s={font:{bold:true,sz:10},fill:subFill,alignment:left};
+    if(showLevel){var rb='B'+(r+1);if(!ws[rb])ws[rb]={t:'s',v:''};ws[rb].s={fill:subFill};}
+  });
+  if(showLevel){playerRows.forEach(function(pr){var rb='B'+(pr.r+1);if(ws[rb])ws[rb].s={font:{sz:10},fill:yelFill,alignment:ctr};});}
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:showLevel?1:0}}];
+  ws['!cols']=showLevel?[{wch:34},{wch:20}]:[{wch:34}];
   XLSX.utils.book_append_sheet(wb,ws,'Grupper');
-  XLSX.writeFile(wb,'Lagdeling_'+sessionGroups.name.replace(/[^a-zA-Z0-9\u00e6\u00f8\u00e5\u00c6\u00d8\u00c5]/g,'_')+'.xlsx');
+  XLSX.writeFile(wb,'Lagdeling_'+s.name.replace(/[^a-zA-Z0-9\u00e6\u00f8\u00e5\u00c6\u00d8\u00c5]/g,'_')+'.xlsx');
 }
 
 function copyToClipboard(){
@@ -2616,6 +2643,7 @@ function renderHistory(){
           '<div class="history-session-title">'+s.name+'</div>'+
           '<div class="history-session-meta">'+date+' \u00b7 '+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' '+gruppeLabelFlertall(s.sessionType)+' \u00b7 '+s.groups.flat().length+' spillere</div>'+
         '</div>'+
+        '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="exportExcel(appHistory['+i+'])">📥 Excel</button>'+
         '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="openShareModal(event,'+i+')">\uD83D\uDCE4 Del</button>'+
         '<button class="btn btn-danger btn-sm" style="margin-right:8px;flex-shrink:0;" onclick="deleteSession(event,'+i+')">Slett</button>'+
         '<span style="font-size:12px;color:var(--slate-light);flex-shrink:0;" id="hist-chevron-'+i+'">\u25BC</span>'+
