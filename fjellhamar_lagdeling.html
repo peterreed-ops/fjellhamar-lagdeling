@@ -396,7 +396,7 @@
 
   </div>
   <div id="setup-summary" style="display:none;">
-    <div class="legend">
+    <div class="legend" id="setup-legend">
       <div class="legend-item"><span class="lvl-dot lvl-dot-1"></span> Nivå 1 — Mest øvede</div>
       <div class="legend-item"><span class="lvl-dot lvl-dot-2"></span> Nivå 2 — Middels</div>
       <div class="legend-item"><span class="lvl-dot lvl-dot-3"></span> Nivå 3 — Minst øvede</div>
@@ -2158,12 +2158,13 @@ function updateSetupSummary(){
   if(!pool.length){summary.style.display='none';return;}
   summary.style.display='block';
   var c=[0,0,0,0];pool.forEach(function(p){c[p.level]++;});
-  document.getElementById('setup-summary-text').innerHTML='<div class="stats-bar">'+
-    '<span class="stat-chip">👥 '+pool.length+' spillere'+(attendingPlayers.length?' deltar':' totalt')+'</span>'+
-    (c[1]?'<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+c[1]+'</span>':'')+
-    (c[2]?'<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+c[2]+'</span>':'')+
-    (c[3]?'<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+c[3]+'</span>':'')+
-    '</div>';
+  var chips='<span class="stat-chip">👥 '+pool.length+' spillere'+(attendingPlayers.length?' deltar':' totalt')+'</span>';
+  if(canEditLevels()){
+    if(c[1])chips+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">Nivå 1: '+c[1]+'</span>';
+    if(c[2])chips+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">Nivå 2: '+c[2]+'</span>';
+    if(c[3])chips+='<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">Nivå 3: '+c[3]+'</span>';
+  }
+  document.getElementById('setup-summary-text').innerHTML='<div class="stats-bar">'+chips+'</div>';
 }
 function clearPlayers(){
   if(!confirm('Slette lagret nivåoversikt?'))return;
@@ -2186,9 +2187,12 @@ function updatePlayersPageForRole(role){
   // Last ned Excel — kun admin
   var excelBtn=document.querySelector('[onclick="exportPlayersExcel()"]');
   if(excelBtn)excelBtn.style.display=isAdmin?'':'none';
-  // Nivå-legend — kun admin
+  // Nivå-legend på spillersiden — kun admin
   var legend=document.querySelector('#page-players .legend');
   if(legend)legend.style.display=isAdmin?'flex':'none';
+  // Nivå-legend på oppsett-siden — kun admin
+  var setupLegend=document.getElementById('setup-legend');
+  if(setupLegend)setupLegend.style.display=isAdmin?'flex':'none';
   // Lagret-rad — kun admin
   var savedRow=document.getElementById('levels-saved-row');
   if(savedRow&&!isAdmin)savedRow.style.display='none';
@@ -2511,7 +2515,7 @@ function renderResult(session,pending){
   var gl=gruppeLabel(session.sessionType,true);
   session.groups.forEach(function(group,i){
     var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
-    var sorted=group.slice().sort(function(a,b){return a.level-b.level;});
+    var sorted=group.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
     // Vis par-skillelinje mellom hvert par (annenhver gruppe)
     if(session.mode==='adapted'&&i>0&&i%2===0){
       html+='<div style="height:6px;"></div>';
@@ -2520,13 +2524,21 @@ function renderResult(session,pending){
       '<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
     html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
     sorted.forEach(function(p){
-      var lvlBadge=canEditLevels()?'<span class="lvl-badge lvl-badge-'+p.level+'">Niv\u00e5 '+p.level+'</span>':'';
-      html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span>'+lvlBadge+'</div>';
+      if(canEditLevels()){
+        var lvlBadge='<span class="lvl-badge lvl-badge-'+p.level+'">Niv\u00e5 '+p.level+'</span>';
+        html+='<div class="player-row"><span><span class="lvl-dot lvl-dot-'+p.level+'"></span> '+p.name+'</span>'+lvlBadge+'</div>';
+      } else {
+        html+='<div class="player-row"><span>'+p.name+'</span></div>';
+      }
     });
     html+='<div class="stats-bar" style="margin-top:10px;">';
-    if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
-    if(c[2])html+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">'+c[2]+'&#xD7; N2</span>';
-    if(c[3])html+='<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">'+c[3]+'&#xD7; N3</span>';
+    if(canEditLevels()){
+      if(c[1])html+='<span class="stat-chip" style="background:var(--lvl1-bg);color:#8a5a00;">'+c[1]+'&#xD7; N1</span>';
+      if(c[2])html+='<span class="stat-chip" style="background:var(--lvl2-bg);color:var(--green);">'+c[2]+'&#xD7; N2</span>';
+      if(c[3])html+='<span class="stat-chip" style="background:var(--lvl3-bg);color:var(--lvl3);">'+c[3]+'&#xD7; N3</span>';
+    } else {
+      html+='<span class="stat-chip">'+group.length+' spillere</span>';
+    }
     html+='</div></div></div>';
   });
   document.getElementById('groups-output').innerHTML=html;
@@ -2554,7 +2566,7 @@ function exportExcel(){
   var gl=gruppeLabel(sessionGroups.sessionType,true);
   sessionGroups.groups.forEach(function(g,i){
     rows.push([gl+' '+(i+1)]);groupHeaderRows.push(rowIdx);rowIdx++;
-    g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){rows.push([p.name,'Niv\u00e5 '+p.level]);playerRows.push({r:rowIdx});rowIdx++;});
+    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){rows.push([p.name,'Niv\u00e5 '+p.level]);playerRows.push({r:rowIdx});rowIdx++;});
     rows.push([]);rowIdx++;
   });
   var ws=XLSX.utils.aoa_to_sheet(rows);
@@ -2580,7 +2592,7 @@ function copyToClipboard(){
   var gl=gruppeLabel(sessionGroups.sessionType,true);
   sessionGroups.groups.forEach(function(g,i){
     text+=gl+' '+(i+1)+':\n';
-    g.slice().sort(function(a,b){return a.level-b.level;}).forEach(function(p){text+='  '+p.name+'\n';});
+    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
     text+='\n';
   });
   navigator.clipboard.writeText(text).then(function(){
@@ -2609,7 +2621,7 @@ function renderHistory(){
         '<span style="font-size:12px;color:var(--slate-light);flex-shrink:0;" id="hist-chevron-'+i+'">\u25BC</span>'+
       '</div>'+
       '<div class="history-session-body" id="hist-body-'+i+'">'+
-        s.groups.map(function(g,gi){return'<div class="history-group"><div class="history-group-name">'+gruppeLabel(s.sessionType,true)+' '+(gi+1)+'</div><div style="font-size:13px;line-height:1.8;">'+g.slice().sort(function(a,b){return a.level-b.level;}).map(function(p){return p.name;}).join(', ')+'</div></div>';}).join('')+
+        s.groups.map(function(g,gi){return'<div class="history-group"><div class="history-group-name">'+gruppeLabel(s.sessionType,true)+' '+(gi+1)+'</div><div style="font-size:13px;line-height:1.8;">'+g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).map(function(p){return p.name;}).join(', ')+'</div></div>';}).join('')+
       '</div></div>';
   }).join('');
 }
@@ -2669,7 +2681,7 @@ function renderShareCard(s){
 }
 function shareTierLabel(label){return'<div class="share-tier-label"><div></div><span>'+label+'</span><div></div></div>';}
 function shareGroupBox(g,i,sessionType){
-  var sorted=g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');});
+  var sorted=g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
   return'<div class="share-group-box"><div class="share-group-title">'+gruppeLabel(sessionType,true)+' '+(i+1)+'</div><div class="share-group-players">'+
     sorted.map(function(p){return'<div class="share-player">'+p.name+'</div>';}).join('')+'</div></div>';
 }
@@ -2685,7 +2697,7 @@ function copyShareText(){
       if(i===upperCount&&upperCount>0)text+='\n\u2014 Nedre niv\u00e5 \u2014\n';
     }
     text+='\n'+gruppeLabel(shareSession.sessionType,true)+' '+(i+1)+':\n';
-    g.slice().sort(function(a,b){return a.level-b.level||a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
+    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
   });
   navigator.clipboard.writeText(text).then(function(){
     var btn=document.querySelector('.modal-actions .btn-primary');
