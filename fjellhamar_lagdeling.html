@@ -227,6 +227,7 @@
   .auth-signout{font-size:12px;padding:4px 10px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;}
   #team-switch-btn{font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;white-space:nowrap;}
   #team-switch-btn:hover{background:rgba(200,168,75,.15);}
+  #role-switcher option{background:#1a2e40;color:white;}
   .auth-signout:hover{background:rgba(255,255,255,.1);color:white;}
 </style>
 </head>
@@ -303,6 +304,12 @@
   <div class="auth-user-bar" id="auth-user-bar" style="display:none;">
     <span id="team-switch-btn" style="display:none;font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;" onclick="showTeamSelectorModal2()">⇄ Bytt lag</span>
     <span class="auth-user-name" id="auth-user-name"></span>
+    <!-- Rolle-velger — kun synlig for superadmin og lagadmin -->
+    <select id="role-switcher" style="display:none;font-size:11px;padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:var(--slate-mid);color:white;cursor:pointer;font-family:'DM Sans',sans-serif;" onchange="switchRole(this.value)" title="Bytt visningsrolle">
+      <option value="superadmin" style="color:var(--slate);background:white;">👑 Superadmin</option>
+      <option value="lagadmin" style="color:var(--slate);background:white;">⚙️ Lagadmin</option>
+      <option value="trener" style="color:var(--slate);background:white;">🏃 Trener</option>
+    </select>
     <button class="auth-signout" onclick="resetOwnPassword()" title="Endre passord">🔑</button>
     <button class="auth-signout" onclick="doSignOut()">Logg ut</button>
   </div>
@@ -937,18 +944,56 @@ function checkUserApproved(user){
   });
 }
 
+// Faktisk rolle fra Firebase (aldri endres av roleSwitch)
+var actualUserRole='';
+
+function switchRole(newRole){
+  currentUserRole=newRole;
+  // Oppdater admin-fane synlighet
+  var showAdmin=newRole==='superadmin'||newRole==='lagadmin';
+  document.getElementById('tab-admin').style.display=showAdmin?'block':'none';
+  // Oppdater rolle-avhengig UI på spillersiden
+  updatePlayersPageForRole(newRole);
+  // Oppdater spillerliste om den er aktiv
+  var ap=document.querySelector('.page.active');
+  if(ap&&ap.id==='page-players')renderPlayersList();
+  // Refresh admin-siden om aktiv
+  if(ap&&ap.id==='page-admin')loadAdminPage();
+}
+
 function onUserAccessGranted(name,role){
   saveLastTeam(currentTeamId,currentTeamName);
+  actualUserRole=role; // lagre faktisk rolle
   document.getElementById('auth-user-name').textContent=name;
   document.getElementById('auth-user-bar').style.display='flex';
   document.getElementById('header-team-name').textContent=currentTeamName||'Fjellhamar FK';
+
+  // Sett opp rolle-velger
+  var roleSwitcher=document.getElementById('role-switcher');
+  if(role==='superadmin'||role==='lagadmin'){
+    roleSwitcher.style.display='block';
+    // Bygg options basert på faktisk rolle
+    if(role==='superadmin'){
+      roleSwitcher.innerHTML=
+        '<option value="superadmin">👑 Superadmin</option>'+
+        '<option value="lagadmin">⚙️ Lagadmin</option>'+
+        '<option value="trener">🏃 Trener</option>';
+    } else {
+      roleSwitcher.innerHTML=
+        '<option value="lagadmin">⚙️ Lagadmin</option>'+
+        '<option value="trener">🏃 Trener</option>';
+    }
+    roleSwitcher.value=role;
+  } else {
+    roleSwitcher.style.display='none';
+  }
+
   if(role==='admin'||role==='lagadmin'||role==='superadmin'){
     document.getElementById('tab-admin').style.display='block';
   }
   if(userTeams.length>1){
     document.getElementById('team-switch-btn').style.display='inline-block';
   }
-  // Vis/skjul admin-only elementer på spillersiden
   updatePlayersPageForRole(role);
   showAuthOverlay(false);
   loadFromFirestore(function(){
@@ -1043,9 +1088,7 @@ function doRegister(){
   fbAuth.createUserWithEmailAndPassword(email,password)
     .then(function(){
       btn.textContent='Lagrer foresp\u00f8rsel\u2026';
-      return fbAuth.signOut();
-    })
-    .then(function(){
+      // Lagre forespørsel MENS brukeren er logget inn (før signOut)
       return fbDb.collection('access_requests').add({
         name:name,email:email,
         teamId:teamInfo.id,teamName:teamInfo.name,
@@ -1053,8 +1096,18 @@ function doRegister(){
       });
     })
     .then(function(){
+      // Logg ut etter at forespørselen er lagret
+      return fbAuth.signOut();
+    })
+    .then(function(){
       btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
-      showAuthMsg('\u2705 Foresp\u00f8rselen er sendt!\n\nAdmin vil godkjenne deg. Du f\u00e5r da logge inn med e-post: '+email,'success');
+      showAuthMsg(
+        '\u2705 Foresp\u00f8rselen er sendt!\n\n' +
+        'Kontoen din er opprettet og venter p\u00e5 godkjenning av admin.\n\n' +
+        'Du f\u00e5r logge inn med e-post: '+email+'\n' +
+        'n\u00e5r du har mottatt beskjed om at du er godkjent.',
+        'success'
+      );
       document.getElementById('reg-name').value='';
       document.getElementById('reg-email').value='';
       document.getElementById('reg-password').value='';
@@ -1063,11 +1116,32 @@ function doRegister(){
       document.getElementById('reg-team-custom-wrap').style.display='none';
     })
     .catch(function(err){
-      btn.disabled=false;btn.textContent='Send forespørsel';
-      var msg='Noe gikk galt. Prøv igjen.';
-      if(err.code==='auth/email-already-in-use')
-        msg='Det finnes allerede en konto med denne e-posten. Har du allerede sendt foresp\u00f8rsel? Pr\u00f8v \u00e5 logge inn, eller kontakt admin.';
-      else if(err.code==='auth/invalid-email')
+      btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+      var msg='Noe gikk galt. Pr\u00f8v igjen.';
+      if(err.code==='auth/email-already-in-use'){
+        // Konto finnes allerede — lagre bare forespørselen
+        fbDb.collection('access_requests').add({
+          name:name,email:email,
+          teamId:teamInfo.id,teamName:teamInfo.name,
+          requested:new Date().toISOString(),status:'pending'
+        }).then(function(){
+          btn.disabled=false;btn.textContent='Send foresp\u00f8rsel';
+          showAuthMsg(
+            '\u2705 Foresp\u00f8rselen er sendt!\n\n' +
+            'Vi ser at du allerede har en konto. Forespørselen venter nå på godkjenning av admin.\n\n' +
+            'Du f\u00e5r logge inn med e-post: '+email+'\n' +
+            'n\u00e5r du har mottatt beskjed om at du er godkjent.',
+            'success'
+          );
+          document.getElementById('reg-name').value='';
+          document.getElementById('reg-email').value='';
+          document.getElementById('reg-password').value='';
+        }).catch(function(){
+          showAuthMsg('Noe gikk galt ved lagring av foresp\u00f8rsel. Pr\u00f8v igjen.','error');
+        });
+        return;
+      }
+      if(err.code==='auth/invalid-email')
         msg='Ugyldig e-postadresse. Sjekk at du har skrevet riktig.';
       else if(err.code==='auth/weak-password')
         msg='Passordet er for svakt. Bruk minst 6 tegn.';
