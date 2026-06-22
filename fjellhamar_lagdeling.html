@@ -484,7 +484,7 @@
   <div class="mode-grid">
     <div class="mode-card selected" id="mode-adapted" onclick="setMode('adapted')">
       <div class="mode-icon">🎯</div><div class="mode-label">Tilpasset</div>
-      <div class="mode-desc">Nivå 1+2 i øvre grupper, Nivå 2+3 i nedre grupper</div>
+      <div class="mode-desc">Velg antall grupper/lag per nivå — øvre og nedre nivå holdes atskilt</div>
     </div>
     <div class="mode-card" id="mode-balanced" onclick="setMode('balanced')">
       <div class="mode-icon">⚖️</div><div class="mode-label">Jevne lag</div>
@@ -500,10 +500,28 @@
         <option value="cupkamp">🏆 Cupkamper</option>
       </select>
     </div>
-    <div class="form-row">
+
+    <!-- Antall grupper/lag — vises ved Jevne lag, eller ved Tilpasset for trening/seriekamp -->
+    <div class="form-row" id="num-groups-row" style="display:none;">
       <label id="label-num-groups">Antall grupper:</label>
       <input type="number" id="num-groups" class="num-input" value="4" min="2" max="20" />
     </div>
+
+    <!-- Tilpasset + antall per nivå — vises kun ved Tilpasset modus -->
+    <div id="level-cup-fields" style="display:block;">
+      <div class="form-row">
+        <label style="flex:1;" id="label-upper-tier">Antall — øvre nivå:</label>
+        <input type="number" id="cup-teams-upper" class="num-input" value="2" min="0" max="20" />
+      </div>
+      <div class="form-row">
+        <label style="flex:1;" id="label-lower-tier">Antall — nedre nivå:</label>
+        <input type="number" id="cup-teams-lower" class="num-input" value="2" min="0" max="20" />
+      </div>
+      <div id="level-cup-hint" style="font-size:12px;color:var(--slate-light);margin:-4px 0 10px;padding:8px 10px;background:var(--fog);border-radius:var(--radius-sm);">
+        Spillerne fordeles slik at den øvre gruppen bygges av nivå 1 (og evt. nivå 2 ved behov), og den nedre av nivå 3 (og evt. nivå 2). Innad i hver gruppe blir lagene jevnbyrdige.
+      </div>
+    </div>
+
     <div class="form-row">
       <label>Dato:</label>
       <input type="date" id="session-date" class="flex-1" />
@@ -2409,24 +2427,50 @@ function setMode(m){
   currentMode=m;
   document.querySelectorAll('.mode-card').forEach(function(el){el.classList.remove('selected');});
   document.getElementById('mode-'+m).classList.add('selected');
+  if(m==='adapted'){
+    document.getElementById('num-groups-row').style.display='none';
+    document.getElementById('level-cup-fields').style.display='block';
+    updateLevelFieldLabels();
+  } else {
+    document.getElementById('num-groups-row').style.display='flex';
+    document.getElementById('level-cup-fields').style.display='none';
+  }
 }
 
 function generateGroups(){
   var pool=attendingPlayers.length?attendingPlayers:allPlayers;
   if(pool.length<2){showBanner('generate','error','Last opp filer og bekreft import på "Last opp"-siden først.');return;}
-  var n=+document.getElementById('num-groups').value;
   var dateVal=document.getElementById('session-date').value;
   var sessionType=document.getElementById('session-type').value;
   var name=dateVal?new Date(dateVal).toLocaleDateString('nb-NO',{day:'numeric',month:'long',year:'numeric'}):new Date().toLocaleDateString('nb-NO',{day:'numeric',month:'long',year:'numeric'});
   var rp=buildRecentPairs(sessionType);
-  var groups=currentMode==='adapted'?generateAdapted(pool,n,rp):generateBalanced(pool,n,rp);
+  var groups;
+
+  if(currentMode==='adapted'){
+    var upperTeams=+document.getElementById('cup-teams-upper').value||0;
+    var lowerTeams=+document.getElementById('cup-teams-lower').value||0;
+    if(upperTeams+lowerTeams<1){showBanner('generate','error','Angi minst ett lag totalt.');return;}
+    groups=generateLevelCup(pool,upperTeams,lowerTeams,rp);
+  } else {
+    var n=+document.getElementById('num-groups').value;
+    groups=generateBalanced(pool,n,rp);
+  }
+
   pendingSession={name:name,sessionType:sessionType,mode:currentMode,groups:groups,date:new Date().toISOString()};
   sessionGroups=pendingSession;renderResult(pendingSession,true);showPage('result');
 }
 function reGenerateGroups(){
   var pool=attendingPlayers.length?attendingPlayers:allPlayers;
-  var rp=buildRecentPairs(pendingSession.sessionType);var n=pendingSession.groups.length;
-  var groups=pendingSession.mode==='adapted'?generateAdapted(pool,n,rp):generateBalanced(pool,n,rp);
+  var rp=buildRecentPairs(pendingSession.sessionType);
+  var groups;
+  if(pendingSession.mode==='adapted'){
+    var upperTeams=+document.getElementById('cup-teams-upper').value||0;
+    var lowerTeams=+document.getElementById('cup-teams-lower').value||0;
+    groups=generateLevelCup(pool,upperTeams,lowerTeams,rp);
+  } else {
+    var n=pendingSession.groups.length;
+    groups=generateBalanced(pool,n,rp);
+  }
   pendingSession={name:pendingSession.name,sessionType:pendingSession.sessionType,mode:pendingSession.mode,groups:groups,date:new Date().toISOString()};
   sessionGroups=pendingSession;renderResult(pendingSession,true);
 }
@@ -2466,10 +2510,21 @@ function approveGroups(){
 function updateGroupLabels(){
   var type=document.getElementById('session-type').value;
   var fl=gruppeLabelFlertall(type);
-  var cap=gruppeLabel(type,true);
   document.getElementById('label-num-groups').textContent='Antall '+fl+':';
   document.getElementById('btn-generate').textContent='\u26A1 Generer '+fl;
   document.getElementById('result-empty').innerHTML='<div class="empty-icon">\uD83D\uDCCA</div>Generer '+fl+' f\u00f8rst';
+  updateLevelFieldLabels();
+}
+
+function updateLevelFieldLabels(){
+  var type=document.getElementById('session-type').value;
+  var isKamp=type==='seriekamp'||type==='cupkamp';
+  var enhet=isKamp?'lag':'grupper';
+  document.getElementById('label-upper-tier').textContent='Antall '+enhet+' — øvre nivå:';
+  document.getElementById('label-lower-tier').textContent='Antall '+enhet+' — nedre nivå:';
+  document.getElementById('level-cup-hint').textContent=
+    'Spillerne fordeles slik at de '+(isKamp?'øvre lagene':'øvre gruppene')+' bygges av nivå 1 (og evt. nivå 2 ved behov), og '+
+    (isKamp?'de nedre lagene':'de nedre gruppene')+' av nivå 3 (og evt. nivå 2). Innad i hvert par blir '+(isKamp?'lagene':'gruppene')+' jevnbyrdige.';
 }
 function gruppeLabel(sessionType, cap){
   var isKamp=sessionType==='seriekamp'||sessionType==='cupkamp';
@@ -2491,6 +2546,87 @@ function buildRecentPairs(sessionType){
   return pairs;
 }
 function pairCost(group,pairs){var c=0;for(var i=0;i<group.length;i++)for(var j=i+1;j<group.length;j++)c+=pairs[[group[i].name,group[j].name].sort().join('|')]||0;return c;}
+
+function generateLevelCup(pool,upperTeams,lowerTeams,rp){
+  // Nivå-cup: et gitt antall lag på øvet nivå og et gitt antall på mindre øvet nivå
+  // Øvede lag = nivå 1 (+ nivå 2 ved behov), mindre øvede lag = nivå 3 (+ nivå 2 ved behov)
+  var l1=shuffle(pool.filter(function(p){return p.level===1;}));
+  var l2=shuffle(pool.filter(function(p){return p.level===2;}));
+  var l3=shuffle(pool.filter(function(p){return p.level===3;}));
+  var totalTeams=upperTeams+lowerTeams;
+  var total=pool.length;
+
+  // Beregn ideelt antall spillere i øvre vs nedre basert på antall lag
+  var upperIdeal=totalTeams>0?Math.round((upperTeams/totalTeams)*total):0;
+  var lowerIdeal=total-upperIdeal;
+
+  // Sørg for parvis jevn fordeling per lag-gruppe (samme logikk som adapted)
+  if(upperTeams>=2&&upperIdeal%upperTeams!==0){
+    upperIdeal=Math.round(upperIdeal/upperTeams)*upperTeams;
+  }
+  lowerIdeal=total-upperIdeal;
+  if(lowerTeams>=2&&lowerIdeal%lowerTeams!==0){
+    lowerIdeal=Math.round(lowerIdeal/lowerTeams)*lowerTeams;
+    upperIdeal=total-lowerIdeal;
+  }
+  upperIdeal=Math.max(upperTeams>0?upperTeams:0,Math.min(total-(lowerTeams>0?lowerTeams:0),upperIdeal));
+  lowerIdeal=total-upperIdeal;
+
+  // Fordel spillere: øvre får nivå 1 + nødvendig fra nivå 2, nedre får nivå 3 + resten av nivå 2
+  var upperFromL1=Math.min(l1.length,upperIdeal);
+  var upperFromL2=Math.max(0,upperIdeal-upperFromL1);
+  upperFromL2=Math.min(upperFromL2,l2.length);
+
+  var upperPlayers=l1.concat(l2.slice(0,upperFromL2));
+  var lowerPlayers=l2.slice(upperFromL2).concat(l3);
+
+  // Fordel jevnt innen hver gruppe (øvre/nedre) — samme snake-draft som adapted
+  function evenDraft(players,ng){
+    var grps=[];for(var k=0;k<ng;k++)grps.push([]);
+    if(!players.length||!ng)return grps;
+    var sorted=players.slice().sort(function(a,b){return a.level-b.level;});
+    var base=Math.floor(sorted.length/ng);
+    var extra=sorted.length%ng;
+    var sizes=[];for(var k=0;k<ng;k++)sizes.push(base+(k<extra?1:0));
+    var idx=0,round=0;
+    while(idx<sorted.length){
+      var forward=round%2===0;
+      for(var pos=0;pos<ng&&idx<sorted.length;pos++){
+        var g=forward?pos:ng-1-pos;
+        if(grps[g].length<sizes[g])grps[g].push(sorted[idx++]);
+      }
+      round++;
+    }
+    return grps;
+  }
+
+  var ug=evenDraft(upperPlayers,upperTeams);
+  var lg=evenDraft(lowerPlayers,lowerTeams);
+
+  // Variasjon-optimalisering innen hver gruppe (kun samme størrelse)
+  function optimise(tg){
+    var ng=tg.length;if(ng<2)return;
+    for(var s=0;s<120;s++){
+      var t1=Math.floor(Math.random()*ng),t2=Math.floor(Math.random()*ng);
+      if(t1===t2||!tg[t1].length||!tg[t2].length)continue;
+      var i1=Math.floor(Math.random()*tg[t1].length),i2=Math.floor(Math.random()*tg[t2].length);
+      var p1=tg[t1][i1],p2=tg[t2][i2];
+      if(tg[t1].length===tg[t2].length){
+        var before=pairCost(tg[t1],rp)+pairCost(tg[t2],rp);
+        tg[t1][i1]=p2;tg[t2][i2]=p1;
+        if(pairCost(tg[t1],rp)+pairCost(tg[t2],rp)>=before){tg[t1][i1]=p1;tg[t2][i2]=p2;}
+      }
+    }
+  }
+  optimise(ug);optimise(lg);
+
+  // Bland rekkefølgen på lagene innen hver gruppe (ikke avslør hvilke som er øvet)
+  // men behold metadata for visning
+  ug.forEach(function(g){g.cupTier='upper';});
+  lg.forEach(function(g){g.cupTier='lower';});
+
+  return ug.concat(lg);
+}
 
 function generateAdapted(pool,n,rp){
   // Tilpasset modus: n/2 par, sortert fra øverste til nederste nivå
@@ -2607,18 +2743,20 @@ function renderResult(session,pending){
   var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
   var tl={trening:'🏃 Trening',seriekamp:'⚽ Seriekamper',cupkamp:'🏆 Cupkamper'};
   document.getElementById('result-meta').textContent=(tl[session.sessionType]||'')+' · '+ml[session.mode]+' · '+session.groups.length+' '+gruppeLabelFlertall(session.sessionType)+' · '+session.groups.flat().length+' spillere';
-  var n=session.groups.length,html='';
+  var html='';
   var gl=gruppeLabel(session.sessionType,true);
+  var isAdapted=session.mode==='adapted';
+  var shownUpperDivider=false,shownLowerDivider=false;
   session.groups.forEach(function(group,i){
     var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
     var sorted=group.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
-    // Vis par-skillelinje mellom hvert par (annenhver gruppe)
-    if(session.mode==='adapted'&&i>0&&i%2===0){
-      html+='<div style="height:6px;"></div>';
+
+    if(isAdapted){
+      if(group.cupTier==='upper'&&!shownUpperDivider){html+=divider('\u00d8vre niv\u00e5');shownUpperDivider=true;}
+      if(group.cupTier==='lower'&&!shownLowerDivider){html+=divider('Nedre niv\u00e5');shownLowerDivider=true;}
     }
-    var pairLbl=(session.mode==='adapted'&&n>=4&&i%2===1)?
-      '<span style="font-size:10px;background:var(--green-pale);color:var(--green);padding:2px 8px;border-radius:99px;font-weight:500;">&#x2194; '+gl+' '+i+'</span>':'';
-    html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+pairLbl+group.length+' spillere</span></div><div class="group-body">';
+
+    html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+group.length+' spillere</span></div><div class="group-body">';
     sorted.forEach(function(p){
       html+='<div class="player-row"><span>'+p.name+'</span></div>';
     });
@@ -2951,6 +3089,7 @@ if('serviceWorker' in navigator){
 
 // Sett dagens dato og start Firebase
 document.getElementById('session-date').value=new Date().toISOString().split('T')[0];
+updateLevelFieldLabels();
 initFirebase();
 handleSharedFile();
 </script>
