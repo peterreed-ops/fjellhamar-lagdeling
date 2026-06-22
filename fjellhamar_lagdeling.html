@@ -484,11 +484,11 @@
   <div class="mode-grid">
     <div class="mode-card selected" id="mode-adapted" onclick="setMode('adapted')">
       <div class="mode-icon">🎯</div><div class="mode-label">Tilpasset</div>
-      <div class="mode-desc">Velg antall grupper/lag per nivå — øvre og nedre nivå holdes atskilt</div>
+      <div class="mode-desc">Inndeling som gir best mestring og passende utfordring for alle</div>
     </div>
     <div class="mode-card" id="mode-balanced" onclick="setMode('balanced')">
       <div class="mode-icon">⚖️</div><div class="mode-label">Jevne lag</div>
-      <div class="mode-desc">Like mange fra hvert nivå på alle grupper</div>
+      <div class="mode-desc">Bredt sammensatte grupper med variert erfaringsnivå</div>
     </div>
   </div>
   <div class="card">
@@ -501,24 +501,24 @@
       </select>
     </div>
 
-    <!-- Antall grupper/lag — vises ved Jevne lag, eller ved Tilpasset for trening/seriekamp -->
-    <div class="form-row" id="num-groups-row" style="display:none;">
+    <!-- Antall grupper/lag — vises ved Jevne lag, eller ved Tilpasset for trening -->
+    <div class="form-row" id="num-groups-row">
       <label id="label-num-groups">Antall grupper:</label>
       <input type="number" id="num-groups" class="num-input" value="4" min="2" max="20" />
     </div>
 
-    <!-- Tilpasset + antall per nivå — vises kun ved Tilpasset modus -->
-    <div id="level-cup-fields" style="display:block;">
+    <!-- Tilpasset + antall per nivå — vises ved Tilpasset for seriekamp/cupkamp -->
+    <div id="level-cup-fields" style="display:none;">
       <div class="form-row">
-        <label style="flex:1;" id="label-upper-tier">Antall — øvre nivå:</label>
+        <label style="flex:1;" id="label-upper-tier">Antall lag — mest erfarne spillere:</label>
         <input type="number" id="cup-teams-upper" class="num-input" value="2" min="0" max="20" />
       </div>
       <div class="form-row">
-        <label style="flex:1;" id="label-lower-tier">Antall — nedre nivå:</label>
+        <label style="flex:1;" id="label-lower-tier">Antall lag — spillere som øver mer:</label>
         <input type="number" id="cup-teams-lower" class="num-input" value="2" min="0" max="20" />
       </div>
       <div id="level-cup-hint" style="font-size:12px;color:var(--slate-light);margin:-4px 0 10px;padding:8px 10px;background:var(--fog);border-radius:var(--radius-sm);">
-        Spillerne fordeles slik at den øvre gruppen bygges av nivå 1 (og evt. nivå 2 ved behov), og den nedre av nivå 3 (og evt. nivå 2). Innad i hver gruppe blir lagene jevnbyrdige.
+        Spillerne fordeles slik at hver gruppe består av spillere på likt utviklingsstadium, for å gi best mulig mestring og passende utfordring for alle. Lagene innad i hver gruppe blir jevnbyrdige.
       </div>
     </div>
 
@@ -2423,11 +2423,22 @@ function exportPlayersExcel(){
   XLSX.utils.book_append_sheet(wb,ws,'Spillere');XLSX.writeFile(wb,'Fjellhamar_spilleroversikt.xlsx');
 }
 
+function usesPerLevelFields(){
+  // Trening med Tilpasset bruker enkel antall-logikk (n/2 par)
+  // Seriekamper/cupkamper med Tilpasset bruker antall per nivå
+  var type=document.getElementById('session-type').value;
+  return currentMode==='adapted'&&(type==='seriekamp'||type==='cupkamp');
+}
+
 function setMode(m){
   currentMode=m;
   document.querySelectorAll('.mode-card').forEach(function(el){el.classList.remove('selected');});
   document.getElementById('mode-'+m).classList.add('selected');
-  if(m==='adapted'){
+  refreshGenerateFields();
+}
+
+function refreshGenerateFields(){
+  if(usesPerLevelFields()){
     document.getElementById('num-groups-row').style.display='none';
     document.getElementById('level-cup-fields').style.display='block';
     updateLevelFieldLabels();
@@ -2446,11 +2457,14 @@ function generateGroups(){
   var rp=buildRecentPairs(sessionType);
   var groups;
 
-  if(currentMode==='adapted'){
+  if(currentMode==='adapted'&&usesPerLevelFields()){
     var upperTeams=+document.getElementById('cup-teams-upper').value||0;
     var lowerTeams=+document.getElementById('cup-teams-lower').value||0;
     if(upperTeams+lowerTeams<1){showBanner('generate','error','Angi minst ett lag totalt.');return;}
     groups=generateLevelCup(pool,upperTeams,lowerTeams,rp);
+  } else if(currentMode==='adapted'){
+    var n=+document.getElementById('num-groups').value;
+    groups=generateAdapted(pool,n,rp);
   } else {
     var n=+document.getElementById('num-groups').value;
     groups=generateBalanced(pool,n,rp);
@@ -2463,10 +2477,14 @@ function reGenerateGroups(){
   var pool=attendingPlayers.length?attendingPlayers:allPlayers;
   var rp=buildRecentPairs(pendingSession.sessionType);
   var groups;
-  if(pendingSession.mode==='adapted'){
+  var wasPerLevel=pendingSession.mode==='adapted'&&(pendingSession.sessionType==='seriekamp'||pendingSession.sessionType==='cupkamp');
+  if(wasPerLevel){
     var upperTeams=+document.getElementById('cup-teams-upper').value||0;
     var lowerTeams=+document.getElementById('cup-teams-lower').value||0;
     groups=generateLevelCup(pool,upperTeams,lowerTeams,rp);
+  } else if(pendingSession.mode==='adapted'){
+    var n=pendingSession.groups.length;
+    groups=generateAdapted(pool,n,rp);
   } else {
     var n=pendingSession.groups.length;
     groups=generateBalanced(pool,n,rp);
@@ -2513,18 +2531,18 @@ function updateGroupLabels(){
   document.getElementById('label-num-groups').textContent='Antall '+fl+':';
   document.getElementById('btn-generate').textContent='\u26A1 Generer '+fl;
   document.getElementById('result-empty').innerHTML='<div class="empty-icon">\uD83D\uDCCA</div>Generer '+fl+' f\u00f8rst';
-  updateLevelFieldLabels();
+  refreshGenerateFields();
 }
 
 function updateLevelFieldLabels(){
   var type=document.getElementById('session-type').value;
   var isKamp=type==='seriekamp'||type==='cupkamp';
   var enhet=isKamp?'lag':'grupper';
-  document.getElementById('label-upper-tier').textContent='Antall '+enhet+' — øvre nivå:';
-  document.getElementById('label-lower-tier').textContent='Antall '+enhet+' — nedre nivå:';
+  document.getElementById('label-upper-tier').textContent='Antall '+enhet+' — mest erfarne spillere:';
+  document.getElementById('label-lower-tier').textContent='Antall '+enhet+' — spillere som øver mer:';
   document.getElementById('level-cup-hint').textContent=
-    'Spillerne fordeles slik at de '+(isKamp?'øvre lagene':'øvre gruppene')+' bygges av nivå 1 (og evt. nivå 2 ved behov), og '+
-    (isKamp?'de nedre lagene':'de nedre gruppene')+' av nivå 3 (og evt. nivå 2). Innad i hvert par blir '+(isKamp?'lagene':'gruppene')+' jevnbyrdige.';
+    'Spillerne fordeles slik at hver '+(isKamp?'lag':'gruppe')+' best\u00e5r av spillere p\u00e5 likt utviklingsstadium, for \u00e5 gi best mulig mestring og passende utfordring for alle. '+
+    (isKamp?'Lagene':'Gruppene')+' innad i hvert par blir jevnbyrdige.';
 }
 function gruppeLabel(sessionType, cap){
   var isKamp=sessionType==='seriekamp'||sessionType==='cupkamp';
@@ -2746,14 +2764,26 @@ function renderResult(session,pending){
   var html='';
   var gl=gruppeLabel(session.sessionType,true);
   var isAdapted=session.mode==='adapted';
+  var hasCupTier=isAdapted&&session.groups.some(function(g){return g.cupTier;});
+  var n=session.groups.length;
   var shownUpperDivider=false,shownLowerDivider=false;
+  var nPairs=Math.floor(n/2);
+  var tierLabels=hasCupTier?null:makeTierLabels(nPairs);
+
   session.groups.forEach(function(group,i){
     var c=[0,0,0,0];group.forEach(function(p){c[p.level]++;});
     var sorted=group.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
 
     if(isAdapted){
-      if(group.cupTier==='upper'&&!shownUpperDivider){html+=divider('\u00d8vre niv\u00e5');shownUpperDivider=true;}
-      if(group.cupTier==='lower'&&!shownLowerDivider){html+=divider('Nedre niv\u00e5');shownLowerDivider=true;}
+      if(hasCupTier){
+        // Antall per nivå-modus (seriekamp/cupkamp)
+        if(group.cupTier==='upper'&&!shownUpperDivider){html+=divider('Gruppe A');shownUpperDivider=true;}
+        if(group.cupTier==='lower'&&!shownLowerDivider){html+=divider('Gruppe B');shownLowerDivider=true;}
+      } else if(i%2===0){
+        // Enkel antall-modus (trening): n/2 par, vis tier-label per par
+        var pairIdx=i/2;
+        html+=divider(tierLabels[pairIdx]||('Par '+(pairIdx+1)));
+      }
     }
 
     html+='<div class="group-card"><div class="group-header"><span class="group-name">'+gl+' '+(i+1)+'</span><span class="group-meta">'+group.length+' spillere</span></div><div class="group-body">';
@@ -2774,13 +2804,10 @@ function renderResult(session,pending){
 }
 
 function makeTierLabels(nPairs){
-  if(nPairs===1)return['Grupper'];
-  if(nPairs===2)return['\u00d8vre niv\u00e5','Nedre niv\u00e5'];
-  if(nPairs===3)return['\u00d8vre niv\u00e5','Midtre niv\u00e5','Nedre niv\u00e5'];
-  if(nPairs===4)return['\u00d8vre niv\u00e5','Midtre \u00f8vre','Midtre nedre','Nedre niv\u00e5'];
-  // Generisk for 5+
+  var letters=['A','B','C','D','E','F','G','H'];
+  if(nPairs<=1)return['Grupper'];
   var labels=[];
-  for(var i=0;i<nPairs;i++)labels.push('Niv\u00e5gruppe '+(i+1));
+  for(var i=0;i<nPairs;i++)labels.push('Gruppe '+(letters[i]||(i+1)));
   return labels;
 }
 function divider(label){return'<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:11px;color:var(--slate-light);white-space:nowrap;">'+label+'</span><div style="flex:1;height:1px;background:var(--border);"></div></div>';}
@@ -2930,12 +2957,7 @@ function copyShareText(){
   if(!shareSession)return;
   var tl={trening:'Trening',seriekamp:'Seriekamper',cupkamp:'Cupkamper'};
   var text='Fjellhamar FK \u00b7 Gutter 2016\n'+shareSession.name+' \u00b7 '+(tl[shareSession.sessionType]||'')+'\n\n';
-  var upperCount=shareSession.mode==='adapted'?Math.floor(shareSession.groups.length/2):0;
   shareSession.groups.forEach(function(g,i){
-    if(shareSession.mode==='adapted'){
-      if(i===0)text+='\u2014 \u00d8vre niv\u00e5 \u2014\n';
-      if(i===upperCount&&upperCount>0)text+='\n\u2014 Nedre niv\u00e5 \u2014\n';
-    }
     text+='\n'+gruppeLabel(shareSession.sessionType,true)+' '+(i+1)+':\n';
     g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){text+='  '+p.name+'\n';});
   });
@@ -3089,7 +3111,7 @@ if('serviceWorker' in navigator){
 
 // Sett dagens dato og start Firebase
 document.getElementById('session-date').value=new Date().toISOString().split('T')[0];
-updateLevelFieldLabels();
+refreshGenerateFields();
 initFirebase();
 handleSharedFile();
 </script>
