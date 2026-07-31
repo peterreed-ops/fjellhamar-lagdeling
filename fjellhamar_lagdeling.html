@@ -748,6 +748,34 @@
   </div>
 </div>
 
+<!-- EDIT HISTORY MODAL -->
+<div class="modal-overlay" id="edit-history-modal" onclick="if(event.target===this)closeEditHistoryModal()">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-topbar">
+      <span class="modal-topbar-title" id="edit-history-modal-title">✏️ Rediger grupper</span>
+      <button class="modal-close" onclick="closeEditHistoryModal()">&#x2715;</button>
+    </div>
+    <div style="padding:1.25rem;max-height:65vh;overflow-y:auto;">
+      <div style="font-size:12px;color:var(--slate-light);margin-bottom:12px;padding:8px 12px;background:var(--gold-pale);border-radius:var(--radius-sm);border-left:3px solid var(--gold);">
+        Flytt spillere mellom grupper, fjern dem fra økten, eller legg til noen som ikke var med. Endringen logges automatisk.
+      </div>
+      <div id="edit-history-modal-body"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <label style="font-size:12px;color:var(--slate-light);display:block;margin-bottom:6px;">Legg til spiller i økten</label>
+        <div style="display:flex;gap:8px;">
+          <select id="edit-history-add-player" style="flex:1;font-size:13px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);"></select>
+          <select id="edit-history-add-group" style="width:110px;font-size:13px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);"></select>
+          <button class="btn btn-sm btn-primary" onclick="addPlayerToHistorySession()">+ Legg til</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEditedHistory()">✓ Lagre endringer</button>
+      <button class="btn" onclick="closeEditHistoryModal()">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <!-- UNMATCHED PLAYERS MODAL -->
 <div class="modal-overlay" id="unmatched-modal">
   <div class="modal-box" style="max-width:480px;">
@@ -2872,9 +2900,11 @@ function renderHistory(){
   if(!appHistory.length){el.innerHTML='<div class="empty"><div class="empty-icon">\uD83D\uDD50</div>Ingen historikk enn\u00e5</div>';return;}
   var ml={adapted:'Tilpasset',balanced:'Jevne lag'};
   var tl={trening:'\uD83C\uDFC3 Trening',seriekamp:'\u26BD Seriekamper',cupkamp:'\uD83C\uDFC6 Cupkamper'};
+  var isAdmin=canEditLevels();
   el.innerHTML=appHistory.map(function(s,i){
     var date=new Date(s.date).toLocaleDateString('nb-NO',{day:'numeric',month:'short',year:'numeric'});
     var typeKey=s.sessionType||'unknown';
+    var editBtn=isAdmin?'<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="openEditHistoryModal(event,'+i+')" title="Rediger grupper">✏️ Rediger</button>':'';
     return'<div class="history-session">'+
       '<div class="history-session-header type-'+typeKey+'" onclick="toggleHistory('+i+')">'+
         '<div style="flex:1;">'+
@@ -2882,9 +2912,10 @@ function renderHistory(){
           '<div class="history-session-title">'+s.name+'</div>'+
           '<div class="history-session-meta">'+date+' \u00b7 '+(ml[s.mode]||s.mode)+' \u00b7 '+s.groups.length+' '+gruppeLabelFlertall(s.sessionType)+' \u00b7 '+s.groups.flat().length+' spillere</div>'+
         '</div>'+
+        editBtn+
         '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="exportExcel(appHistory['+i+'])">📥 Excel</button>'+
         '<button class="btn btn-sm" style="margin-right:4px;flex-shrink:0;" onclick="openShareModal(event,'+i+')">\uD83D\uDCE4 Del</button>'+
-        '<button class="btn btn-danger btn-sm" style="margin-right:8px;flex-shrink:0;" onclick="deleteSession(event,'+i+')">Slett</button>'+
+        (isAdmin?'<button class="btn btn-danger btn-sm" style="margin-right:8px;flex-shrink:0;" onclick="deleteSession(event,'+i+')">Slett</button>':'')+
         '<span style="font-size:12px;color:var(--slate-light);flex-shrink:0;" id="hist-chevron-'+i+'">\u25BC</span>'+
       '</div>'+
       '<div class="history-session-body" id="hist-body-'+i+'">'+
@@ -2892,6 +2923,108 @@ function renderHistory(){
       '</div></div>';
   }).join('');
 }
+// ── REDIGER HISTORIKK (kun lagadmin/superadmin) ────────────────
+var editHistoryIndex=null;
+var editHistoryGroups=null; // arbeidskopi av gruppene som redigeres
+
+function openEditHistoryModal(e,i){
+  e.stopPropagation();
+  if(!canEditLevels()){alert('Kun lagadmin og superadmin kan redigere historikk.');return;}
+  editHistoryIndex=i;
+  // Dyp kopi av gruppene slik at vi kan avbryte uten å påvirke original
+  editHistoryGroups=JSON.parse(JSON.stringify(appHistory[i].groups));
+  document.getElementById('edit-history-modal-title').textContent='✏️ Rediger: '+appHistory[i].name;
+  renderEditHistoryModalBody();
+  populateEditHistoryAddPlayer();
+  document.getElementById('edit-history-modal').classList.add('open');
+}
+
+function closeEditHistoryModal(){
+  document.getElementById('edit-history-modal').classList.remove('open');
+  editHistoryIndex=null;editHistoryGroups=null;
+}
+
+function renderEditHistoryModalBody(){
+  var body=document.getElementById('edit-history-modal-body');
+  var sessionType=appHistory[editHistoryIndex].sessionType;
+  var gl=gruppeLabel(sessionType,true);
+  var html='';
+  editHistoryGroups.forEach(function(g,gi){
+    html+='<div style="margin-bottom:14px;">'+
+      '<div style="font-family:\'Syne\',sans-serif;font-weight:700;font-size:13px;color:var(--slate);margin-bottom:6px;">'+gl+' '+(gi+1)+' ('+g.length+')</div>';
+    g.slice().sort(function(a,b){return a.name.localeCompare(b.name,'nb');}).forEach(function(p){
+      var realIdx=g.indexOf(p);
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--fog);border-radius:var(--radius-sm);margin-bottom:4px;">'+
+        '<span style="flex:1;font-size:13px;">'+p.name+'</span>'+
+        '<select onchange="movePlayerInEdit('+gi+','+realIdx+',this.value)" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:white;">'+
+          editHistoryGroups.map(function(gg,ggi){return'<option value="'+ggi+'"'+(ggi===gi?' selected':'')+'>'+gl+' '+(ggi+1)+'</option>';}).join('')+
+        '</select>'+
+        '<button class="btn btn-danger btn-sm" onclick="removePlayerFromEdit('+gi+','+realIdx+')" title="Fjern fra økten">✕</button>'+
+      '</div>';
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+
+function movePlayerInEdit(fromGroup,playerIdx,toGroupStr){
+  var toGroup=+toGroupStr;
+  if(fromGroup===toGroup)return;
+  var player=editHistoryGroups[fromGroup][playerIdx];
+  editHistoryGroups[fromGroup].splice(playerIdx,1);
+  editHistoryGroups[toGroup].push(player);
+  renderEditHistoryModalBody();
+}
+
+function removePlayerFromEdit(groupIdx,playerIdx){
+  editHistoryGroups[groupIdx].splice(playerIdx,1);
+  renderEditHistoryModalBody();
+}
+
+function populateEditHistoryAddPlayer(){
+  var sel=document.getElementById('edit-history-add-player');
+  var groupSel=document.getElementById('edit-history-add-group');
+  var currentNames={};
+  editHistoryGroups.forEach(function(g){g.forEach(function(p){currentNames[p.name.toLowerCase()]=true;});});
+  var available=allPlayers.filter(function(p){return !currentNames[p.name.toLowerCase()];})
+    .sort(function(a,b){return a.name.localeCompare(b.name,'nb');});
+  if(!available.length){
+    sel.innerHTML='<option value="">Alle spillere er allerede med</option>';
+  } else {
+    sel.innerHTML=available.map(function(p){return'<option value="'+p.name.replace(/"/g,'&quot;')+'">'+p.name+'</option>';}).join('');
+  }
+  var gl=gruppeLabel(appHistory[editHistoryIndex].sessionType,true);
+  groupSel.innerHTML=editHistoryGroups.map(function(g,gi){return'<option value="'+gi+'">'+gl+' '+(gi+1)+'</option>';}).join('');
+}
+
+function addPlayerToHistorySession(){
+  var sel=document.getElementById('edit-history-add-player');
+  var groupSel=document.getElementById('edit-history-add-group');
+  var name=sel.value;
+  if(!name)return;
+  var player=allPlayers.find(function(p){return p.name===name;});
+  if(!player)return;
+  var targetGroup=+groupSel.value;
+  editHistoryGroups[targetGroup].push({name:player.name,level:player.level});
+  renderEditHistoryModalBody();
+  populateEditHistoryAddPlayer();
+}
+
+function saveEditedHistory(){
+  if(editHistoryIndex===null)return;
+  var original=appHistory[editHistoryIndex];
+  var oldNames=original.groups.map(function(g,i){return(i+1)+': '+g.map(function(p){return p.name;}).sort().join(', ');}).join(' | ');
+  var newNames=editHistoryGroups.map(function(g,i){return(i+1)+': '+g.map(function(p){return p.name;}).sort().join(', ');}).join(' | ');
+
+  if(oldNames===newNames){closeEditHistoryModal();return;}
+
+  appHistory[editHistoryIndex].groups=editHistoryGroups;
+  saveHistory();
+  logChange('Historikk endret','"'+original.name+'" \u2014 gruppesammensetning endret manuelt');
+  closeEditHistoryModal();
+  renderHistory();
+}
+
 function toggleHistory(i){
   var body=document.getElementById('hist-body-'+i);var chev=document.getElementById('hist-chevron-'+i);
   var open=body.classList.toggle('open');chev.textContent=open?'\u25B2':'\u25BC';
