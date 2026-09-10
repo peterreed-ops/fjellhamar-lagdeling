@@ -343,7 +343,7 @@
   <button class="nav-tab" onclick="showPage('generate')">Generer</button>
   <button class="nav-tab" onclick="showPage('result')">Resultat</button>
   <button class="nav-tab" onclick="showPage('history')">Historikk</button>
-  <button class="nav-tab" id="tab-admin" style="display:none;color:var(--gold);border-bottom-color:transparent;" onclick="showPage('admin')">⚙️ Admin</button>
+  <button class="nav-tab" id="tab-admin" style="display:none;color:var(--gold);border-bottom-color:transparent;position:relative;" onclick="showPage('admin')">⚙️ Admin<span id="admin-badge" style="display:none;position:absolute;top:2px;right:2px;background:var(--danger);color:white;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;align-items:center;justify-content:center;padding:0 4px;line-height:16px;"></span></button>
 </div>
 </div>
 <div class="main">
@@ -572,6 +572,22 @@
 
 <!-- ADMIN -->
 <div id="page-admin" class="page">
+
+  <!-- VARSLER -->
+  <div id="notif-permission-banner" style="display:none;background:var(--green-pale);border:1px solid var(--green-light);border-radius:var(--radius);padding:12px 16px;margin-bottom:1.25rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="font-size:13px;color:var(--green);flex:1;">
+        <strong>🔔 Vil du bli varslet</strong> når noen ber om tilgang? Aktiver nettleservarsler.
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-primary" onclick="enableAdminNotifications()">Aktiver</button>
+        <button class="btn btn-sm" onclick="dismissNotifBanner()">Ikke nå</button>
+      </div>
+    </div>
+  </div>
+  <div id="notif-enabled-msg" style="display:none;font-size:12px;color:var(--green);margin-bottom:1.25rem;padding:8px 12px;background:var(--green-pale);border-radius:var(--radius-sm);">
+    ✅ Varsler er aktivert — du får beskjed når noen ber om tilgang.
+  </div>
 
   <!-- SUPERADMIN-SEKSJON — tydelig markert -->
   <div id="admin-superadmin-section" style="display:none;">
@@ -1036,6 +1052,7 @@ function onUserAccessGranted(name,role){
 
   if(role==='admin'||role==='lagadmin'||role==='superadmin'){
     document.getElementById('tab-admin').style.display='block';
+    startPendingRequestsListener();
   }
   if(userTeams.length>1){
     document.getElementById('team-switch-btn').style.display='inline-block';
@@ -1197,6 +1214,7 @@ function doRegister(){
     });
 }
 function doSignOut(){
+  stopPendingRequestsListener();
   currentUserEmail='';currentUserRole='';currentTeamId='';currentTeamName='';userTeams=[];
   allPlayers=[];appHistory=[];attendingNames=[];attendingPlayers=[];
   document.getElementById('auth-user-bar').style.display='none';
@@ -1421,10 +1439,105 @@ function clearAllLog(){
 
 var currentUserEmail='';
 
+// ── VARSLER FOR NYE TILGANGSFORESPØRSLER ───────────────────────
+var pendingRequestsUnsub=null;
+var knownPendingRequestIds=null; // null = ikke initialisert ennå
+
+function startPendingRequestsListener(){
+  if(!fbDb||!currentUserEmail)return;
+  stopPendingRequestsListener(); // unngå duplikate lyttere
+  knownPendingRequestIds=null;
+  var isSA=currentUserRole==='superadmin'||actualUserRole==='superadmin';
+  pendingRequestsUnsub=fbDb.collection('access_requests').onSnapshot(function(snap){
+    var pending=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      if(d.status!=='pending')return;
+      // Lagadmin ser kun forespørsler for eget lag (eller uten teamId)
+      if(!isSA&&d.teamId!==currentTeamId&&d.teamId)return;
+      pending.push({id:doc.id,data:d});
+    });
+    updateAdminBadge(pending.length);
+    if(knownPendingRequestIds===null){
+      // Første last — bare registrer, ikke varsle
+      knownPendingRequestIds={};
+      pending.forEach(function(p){knownPendingRequestIds[p.id]=true;});
+    } else {
+      var newOnes=pending.filter(function(p){return !knownPendingRequestIds[p.id];});
+      newOnes.forEach(function(p){
+        knownPendingRequestIds[p.id]=true;
+        showBrowserNotification(
+          '\uD83D\uDC65 Ny tilgangsforesp\u00f8rsel',
+          p.data.name+' \u00f8nsker tilgang til '+(p.data.teamName||'et lag')
+        );
+      });
+    }
+  },function(err){console.warn('Listener-feil (access_requests):',err);});
+}
+
+function stopPendingRequestsListener(){
+  if(pendingRequestsUnsub){pendingRequestsUnsub();pendingRequestsUnsub=null;}
+  knownPendingRequestIds=null;
+  updateAdminBadge(0);
+}
+
+function updateAdminBadge(count){
+  var badge=document.getElementById('admin-badge');
+  if(!badge)return;
+  if(count>0){badge.textContent=count>9?'9+':count;badge.style.display='flex';}
+  else{badge.style.display='none';}
+}
+
+function showBrowserNotification(title,body){
+  if(!('Notification' in window))return;
+  if(Notification.permission!=='granted')return;
+  try{
+    var n=new Notification(title,{body:body,icon:'icon-192.png',badge:'icon-192.png'});
+    n.onclick=function(){window.focus();showPage('admin');n.close();};
+  }catch(e){console.warn('Kunne ikke vise varsel:',e);}
+}
+
+function enableAdminNotifications(){
+  if(!('Notification' in window)){
+    alert('Nettleseren din st\u00f8tter dessverre ikke varsler.');
+    return;
+  }
+  Notification.requestPermission().then(function(permission){
+    updateNotifBannerState();
+    if(permission==='granted'){
+      new Notification('\uD83D\uDD14 Varsler aktivert',{body:'Du f\u00e5r n\u00e5 beskjed n\u00e5r noen ber om tilgang.',icon:'icon-192.png'});
+    }
+  });
+}
+
+function dismissNotifBanner(){
+  try{localStorage.setItem('fk_notif_dismissed','1');}catch(e){}
+  document.getElementById('notif-permission-banner').style.display='none';
+}
+
+function updateNotifBannerState(){
+  var banner=document.getElementById('notif-permission-banner');
+  var enabledMsg=document.getElementById('notif-enabled-msg');
+  if(!('Notification' in window)){banner.style.display='none';enabledMsg.style.display='none';return;}
+  if(Notification.permission==='granted'){
+    banner.style.display='none';
+    enabledMsg.style.display='block';
+  } else if(Notification.permission==='denied'){
+    banner.style.display='none';
+    enabledMsg.style.display='none';
+  } else {
+    var dismissed=false;
+    try{dismissed=localStorage.getItem('fk_notif_dismissed')==='1';}catch(e){}
+    banner.style.display=dismissed?'none':'block';
+    enabledMsg.style.display='none';
+  }
+}
+
 function loadAdminPage(){
   var isSA=currentUserRole==='superadmin';
   document.getElementById('admin-superadmin-section').style.display=isSA?'block':'none';
   document.getElementById('admin-team-label').textContent=currentTeamName||'dette laget';
+  updateNotifBannerState();
   if(isSA){loadTeamsList();loadAllRequests();loadSuperadminList();}
   loadAdminRequests();loadAllUsers();
 }
