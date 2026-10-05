@@ -2711,62 +2711,47 @@ function buildRecentPairs(sessionType){
 function pairCost(group,pairs){var c=0;for(var i=0;i<group.length;i++)for(var j=i+1;j<group.length;j++)c+=pairs[[group[i].name,group[j].name].sort().join('|')]||0;return c;}
 
 function generateLevelCup(pool,upperTeams,lowerTeams,rp){
-  // Nivå-cup: et gitt antall lag på øvet nivå og et gitt antall på mindre øvet nivå
-  // Øvede lag = nivå 1 (+ nivå 2 ved behov), mindre øvede lag = nivå 3 (+ nivå 2 ved behov)
-  var l1=shuffle(pool.filter(function(p){return p.level===1;}));
-  var l2=shuffle(pool.filter(function(p){return p.level===2;}));
-  var l3=shuffle(pool.filter(function(p){return p.level===3;}));
-  var totalTeams=upperTeams+lowerTeams;
-  var total=pool.length;
+  // Alle lag får så lik størrelse som mulig (maks 1 spillers forskjell totalt).
+  // Spillerne sorteres etter nivå (tilfeldig innen samme nivå): de første danner øvre lag, resten nedre lag.
+  var n=upperTeams+lowerTeams,total=pool.length;
+  var base=Math.floor(total/n),extra=total%n;
 
-  // Beregn ideelt antall spillere i øvre vs nedre basert på antall lag
-  var upperIdeal=totalTeams>0?Math.round((upperTeams/totalTeams)*total):0;
-  var lowerIdeal=total-upperIdeal;
-
-  // Sørg for parvis jevn fordeling per lag-gruppe (samme logikk som adapted)
-  if(upperTeams>=2&&upperIdeal%upperTeams!==0){
-    upperIdeal=Math.round(upperIdeal/upperTeams)*upperTeams;
+  // Velg hvilke lag som får en ekstra spiller slik at lagene innen samme gruppe helst er like store
+  var best=null;
+  for(var rU=Math.max(0,extra-lowerTeams);rU<=Math.min(upperTeams,extra);rU++){
+    var rL=extra-rU;
+    var mixed=((rU>0&&rU<upperTeams)?1:0)+((rL>0&&rL<lowerTeams)?1:0);
+    if(best===null||mixed<best.mixed||(mixed===best.mixed&&rU>best.rU))best={rU:rU,rL:rL,mixed:mixed};
   }
-  lowerIdeal=total-upperIdeal;
-  if(lowerTeams>=2&&lowerIdeal%lowerTeams!==0){
-    lowerIdeal=Math.round(lowerIdeal/lowerTeams)*lowerTeams;
-    upperIdeal=total-lowerIdeal;
-  }
-  upperIdeal=Math.max(upperTeams>0?upperTeams:0,Math.min(total-(lowerTeams>0?lowerTeams:0),upperIdeal));
-  lowerIdeal=total-upperIdeal;
+  var upperSizes=[],lowerSizes=[],upperTotal=0;
+  for(var i=0;i<upperTeams;i++){var su=base+(i<best.rU?1:0);upperSizes.push(su);upperTotal+=su;}
+  for(var j=0;j<lowerTeams;j++)lowerSizes.push(base+(j<best.rL?1:0));
 
-  // Fordel spillere: øvre får nivå 1 + nødvendig fra nivå 2, nedre får nivå 3 + resten av nivå 2
-  var upperFromL1=Math.min(l1.length,upperIdeal);
-  var upperFromL2=Math.max(0,upperIdeal-upperFromL1);
-  upperFromL2=Math.min(upperFromL2,l2.length);
+  var sorted=shuffle(pool).sort(function(a,b){return genLevel(a)-genLevel(b);});
+  var upperPlayers=sorted.slice(0,upperTotal);
+  var lowerPlayers=sorted.slice(upperTotal);
 
-  var upperPlayers=l1.concat(l2.slice(0,upperFromL2));
-  var lowerPlayers=l2.slice(upperFromL2).concat(l3);
-
-  // Fordel jevnt innen hver gruppe (øvre/nedre) — samme snake-draft som adapted
-  function evenDraft(players,ng){
+  // Snake-draft med eksakte størrelser per lag
+  function evenDraft(players,sizes){
+    var ng=sizes.length;
     var grps=[];for(var k=0;k<ng;k++)grps.push([]);
     if(!players.length||!ng)return grps;
-    var sorted=players.slice().sort(function(a,b){return a.level-b.level;});
-    var base=Math.floor(sorted.length/ng);
-    var extra=sorted.length%ng;
-    var sizes=[];for(var k=0;k<ng;k++)sizes.push(base+(k<extra?1:0));
     var idx=0,round=0;
-    while(idx<sorted.length){
+    while(idx<players.length){
       var forward=round%2===0;
-      for(var pos=0;pos<ng&&idx<sorted.length;pos++){
+      for(var pos=0;pos<ng&&idx<players.length;pos++){
         var g=forward?pos:ng-1-pos;
-        if(grps[g].length<sizes[g])grps[g].push(sorted[idx++]);
+        if(grps[g].length<sizes[g])grps[g].push(players[idx++]);
       }
       round++;
     }
     return grps;
   }
 
-  var ug=evenDraft(upperPlayers,upperTeams);
-  var lg=evenDraft(lowerPlayers,lowerTeams);
+  var ug=evenDraft(upperPlayers,upperSizes);
+  var lg=evenDraft(lowerPlayers,lowerSizes);
 
-  // Variasjon-optimalisering innen hver gruppe (kun samme størrelse)
+  // Variasjon fra tidligere økter (bytter kun mellom lag av samme størrelse)
   function optimise(tg){
     var ng=tg.length;if(ng<2)return;
     for(var s=0;s<120;s++){
@@ -2783,11 +2768,8 @@ function generateLevelCup(pool,upperTeams,lowerTeams,rp){
   }
   optimise(ug);optimise(lg);
 
-  // Bland rekkefølgen på lagene innen hver gruppe (ikke avslør hvilke som er øvet)
-  // men behold metadata for visning
   ug.forEach(function(g){g.cupTier='upper';});
   lg.forEach(function(g){g.cupTier='lower';});
-
   return ug.concat(lg);
 }
 
@@ -2801,7 +2783,7 @@ function generateAdapted(pool,n,rp){
   var total=pool.length;
 
   // Sorter alle spillere etter nivå (lavt nivå=best øverst)
-  var sorted=pool.slice().sort(function(a,b){return a.level-b.level;});
+  var sorted=pool.slice().sort(function(a,b){return genLevel(a)-genLevel(b);});
 
   // Beregn ideell størrelse per gruppe totalt
   var baseSize=Math.floor(total/n);
@@ -2877,19 +2859,44 @@ function generateAdapted(pool,n,rp){
   if(hasOdd) result.push(groups[n-1]);
   return result;
 }
+function genLevel(p){
+  // Spillere uten nivå (0) behandles som middels ved generering, slik at ingen faller utenfor
+  return(p.level>=1&&p.level<=3)?p.level:2;
+}
+
 function generateBalanced(pool,n,rp){
-  var groups=[];for(var k=0;k<n;k++)groups.push([]);
-  [1,2,3].forEach(function(lvl,li){
-    var players=shuffle(pool.filter(function(p){return p.level===lvl;}));
-    var base=Math.floor(players.length/n),extra=players.length%n,idx=0;
-    for(var g=0;g<n;g++){var count=base+(g<extra?1:0);var gIdx=li%2===0?g:n-1-g;for(var k=0;k<count;k++){if(idx<players.length)groups[gIdx].push(players[idx++]);}}
+  // 1) Bestem eksakt størrelse per gruppe: forskjellen mellom største og minste er maks 1
+  var total=pool.length;
+  var base=Math.floor(total/n),extra=total%n;
+  var order=shuffle(Array.apply(null,Array(n)).map(function(_,i){return i;}));
+  var cap=[];for(var k=0;k<n;k++)cap.push(base);
+  for(var e=0;e<extra;e++)cap[order[e]]++; // tilfeldig hvilke grupper som får en ekstra spiller
+
+  // 2) Fordel nivå for nivå: hver spiller går til gruppen med færrest spillere på samme nivå
+  //    (blant grupper som fortsatt har plass), og ved likt til gruppen med mest ledig plass
+  var groups=[],lvlCount=[];
+  for(var g=0;g<n;g++){groups.push([]);lvlCount.push([0,0,0,0]);}
+  [1,2,3].forEach(function(lvl){
+    shuffle(pool.filter(function(p){return genLevel(p)===lvl;})).forEach(function(p){
+      var bestScore=null,cands=[];
+      for(var g=0;g<n;g++){
+        if(groups[g].length>=cap[g])continue;
+        var score=lvlCount[g][lvl]*1000-(cap[g]-groups[g].length);
+        if(bestScore===null||score<bestScore){bestScore=score;cands=[g];}
+        else if(score===bestScore)cands.push(g);
+      }
+      var pick=cands[Math.floor(Math.random()*cands.length)];
+      groups[pick].push(p);lvlCount[pick][lvl]++;
+    });
   });
+
+  // 3) Variasjon fra tidligere økter: bytt kun spillere på samme nivå (størrelsene endres ikke)
   for(var s=0;s<120;s++){
     var t1=Math.floor(Math.random()*n),t2=Math.floor(Math.random()*n);
     if(t1===t2||!groups[t1].length||!groups[t2].length)continue;
     var i1=Math.floor(Math.random()*groups[t1].length),i2=Math.floor(Math.random()*groups[t2].length);
     var p1=groups[t1][i1],p2=groups[t2][i2];
-    if(p1.level!==p2.level)continue;
+    if(genLevel(p1)!==genLevel(p2))continue;
     var before=pairCost(groups[t1],rp)+pairCost(groups[t2],rp);
     groups[t1][i1]=p2;groups[t2][i2]=p1;
     if(pairCost(groups[t1],rp)+pairCost(groups[t2],rp)>=before){groups[t1][i1]=p1;groups[t2][i2]=p2;}
