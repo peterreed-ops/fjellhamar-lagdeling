@@ -855,7 +855,7 @@ function initFirebase(){
   try{
     firebase.initializeApp(firebaseConfig);
     fbAuth=firebase.auth();fbDb=firebase.firestore();
-    try{fbDb.settings({experimentalAutoDetectLongPolling:true});}catch(e){console.warn('Long-polling-innstilling ikke tilgjengelig:',e.message);}
+    try{fbDb.settings({experimentalForceLongPolling:true,merge:true});}catch(e){console.warn('Long-polling-innstilling ikke tilgjengelig:',e.message);}
     // Load available teams for registration dropdown
     loadAvailableTeams();
     fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
@@ -923,6 +923,22 @@ function loadLastTeam(){
   try{return JSON.parse(localStorage.getItem('fk_last_team')||'null');}catch(e){return null;}
 }
 
+function getWithRetry(q,tries,ms){
+  tries=tries||3;ms=ms||7000;
+  return new Promise(function(resolve,reject){
+    var n=0;
+    (function attempt(){
+      n++;var done=false;
+      var t=setTimeout(function(){
+        if(done)return;done=true;
+        if(n<tries)attempt();else reject(new Error('timeout'));
+      },ms);
+      q.get({source:'server'}).then(function(r){if(done)return;done=true;clearTimeout(t);resolve(r);})
+       .catch(function(e){if(done)return;done=true;clearTimeout(t);
+         if(n<tries&&e&&e.code==='unavailable')attempt();else reject(e);});
+    })();
+  });
+}
 function checkUserApproved(user){
   currentUserEmail=user.email;
   loginStage='sjekker superadmin-status';
@@ -959,7 +975,7 @@ function checkUserApproved(user){
 
     // Sjekk team_members
     loginStage='henter lagtilgang';
-    fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
+    getWithRetry(fbDb.collection('team_members').where('email','==',user.email),3,7000).then(function(snap){
       if(!snap.empty){
         userTeams=[];
         snap.forEach(function(doc){userTeams.push(Object.assign({docId:doc.id},doc.data()));});
