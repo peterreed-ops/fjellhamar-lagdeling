@@ -1,7 +1,7 @@
 // Service Worker for Lagdeling PWA
 // Håndterer delte filer fra iOS/Android Del-funksjon
 
-const CACHE_NAME = 'lagdeling-v1';
+const CACHE_NAME = 'lagdeling-v2';
 
 // Installer service worker
 self.addEventListener('install', function(event) {
@@ -22,7 +22,13 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Vanlige forespørsler — pass through
+  // Alt annet (Firebase innlogging/database, eksterne scripts, osv.) går rett til nettverket
+  // uten at tjenestearbeideren blander seg inn. Dette unngår at Firebases lange tilkoblinger henger.
+  if (url.origin !== self.location.origin || event.request.method !== 'GET') {
+    return;
+  }
+
+  // Appens egne filer: hent fra nett, bruk cache kun hvis nettet feiler
   event.respondWith(fetch(event.request).catch(function() {
     return caches.match(event.request);
   }));

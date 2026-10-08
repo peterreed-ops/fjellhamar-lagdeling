@@ -855,6 +855,7 @@ function initFirebase(){
   try{
     firebase.initializeApp(firebaseConfig);
     fbAuth=firebase.auth();fbDb=firebase.firestore();
+    try{fbDb.settings({experimentalAutoDetectLongPolling:true});}catch(e){console.warn('Long-polling-innstilling ikke tilgjengelig:',e.message);}
     // Load available teams for registration dropdown
     loadAvailableTeams();
     fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
@@ -924,6 +925,7 @@ function loadLastTeam(){
 
 function checkUserApproved(user){
   currentUserEmail=user.email;
+  loginStage='sjekker superadmin-status';
 
   // Sjekk superadmins-collection i Firestore (inkl. hardkodet superadmin)
   var isMasterAdmin=user.email===SUPERADMIN_EMAIL;
@@ -956,6 +958,7 @@ function checkUserApproved(user){
     }
 
     // Sjekk team_members
+    loginStage='henter lagtilgang';
     fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
       if(!snap.empty){
         userTeams=[];
@@ -978,6 +981,7 @@ function checkUserApproved(user){
         return;
       }
       // Bakoverkompatibilitet: sjekk approved_users
+      loginStage='sjekker eldre tilgangsliste';
       fbDb.collection('approved_users').doc(user.email).get().then(function(doc){
         if(doc.exists){
           var role=doc.data().role||'trener';
@@ -990,6 +994,12 @@ function checkUserApproved(user){
             showAuthMsg('\u23F3 Foresp\u00f8rselen din er ikke godkjent enn\u00e5.\n\nAdmin m\u00e5 godkjenne deg f\u00f8r du kan logge inn. Pr\u00f8v igjen etter at du har mottatt beskjed.','pending');
           });
         }
+      }).catch(function(e){
+        console.warn('approved_users:',e);
+        fbAuth.signOut().then(function(){
+          showAuthOverlay(true);
+          showAuthMsg('Kunne ikke verifisere tilgang. Sjekk internettforbindelsen og pr\u00f8v igjen.','error');
+        });
       });
     }).catch(function(e){
       console.warn('checkUserApproved:',e);
@@ -1073,25 +1083,48 @@ function onUserAccessGranted(name,role){
     }
   });
 }
-function showAuthOverlay(show){document.getElementById('auth-overlay').style.display=show?'flex':'none';}
+function showAuthOverlay(show){document.getElementById('auth-overlay').style.display=show?'flex':'none';if(!show)resetLoginBtn();}
 function switchAuthTab(tab){
   document.querySelectorAll('.auth-tab').forEach(function(el,i){el.classList.toggle('active',(tab==='login'&&i===0)||(tab==='register'&&i===1));});
   document.getElementById('auth-login').style.display=tab==='login'?'block':'none';
   document.getElementById('auth-register').style.display=tab==='register'?'block':'none';
   hideAuthMsg();
 }
+var loginWatchdog=null,loginStage='';
+
+function resetLoginBtn(){
+  var btn=document.querySelector('#auth-login .auth-btn');
+  if(btn){btn.disabled=false;btn.textContent='Logg inn';}
+  if(loginWatchdog){clearTimeout(loginWatchdog);loginWatchdog=null;}
+}
+
 function doLogin(){
   var email=document.getElementById('login-email').value.trim();
   var password=document.getElementById('login-password').value;
   if(!email||!password){showAuthMsg('Fyll inn e-post og passord.','error');return;}
   var btn=document.querySelector('#auth-login .auth-btn');btn.disabled=true;btn.textContent='Logger inn\u2026';
+  hideAuthMsg();
+  loginStage='verifiserer passord';
+  // Vaktbikkje: hvis innloggingen ikke er ferdig etter 20 sekunder, gi beskjed i stedet for å henge
+  if(loginWatchdog)clearTimeout(loginWatchdog);
+  loginWatchdog=setTimeout(function(){
+    loginWatchdog=null;
+    var stage=loginStage;
+    if(fbAuth)fbAuth.signOut();
+    showAuthOverlay(true);
+    showAuthMsg('Innloggingen tok for lang tid (stoppet ved: '+stage+').\n\nSjekk nettverket, pr\u00f8v mobildata i stedet for Wi-Fi (eller omvendt), og skru av VPN/innholdsblokkering. Pr\u00f8v s\u00e5 igjen.','error');
+  },20000);
   fbAuth.signInWithEmailAndPassword(email,password).catch(function(err){
-    btn.disabled=false;btn.textContent='Logg inn';
-    var msg='Feil e-post eller passord.';
-    if(err.code==='auth/too-many-requests')msg='For mange fors\u00f8k. Pr\u00f8v igjen om litt.';
+    var wrong=['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-login-credentials','auth/invalid-email'];
+    var msg;
+    if(wrong.indexOf(err.code)>=0)msg='Feil e-post eller passord.';
+    else if(err.code==='auth/too-many-requests')msg='For mange fors\u00f8k. Pr\u00f8v igjen om litt, eller bruk \u00abGlemt passord?\u00bb.';
+    else if(err.code==='auth/network-request-failed')msg='Ingen kontakt med innloggingstjenesten. Sjekk nettverket og pr\u00f8v igjen.';
+    else msg='Kunne ikke logge inn ('+(err.code||'ukjent feil')+'). Pr\u00f8v igjen.';
     showAuthMsg(msg,'error');
   });
 }
+
 function doForgotPassword(){
   var email=document.getElementById('login-email').value.trim();
   if(!email){
@@ -1227,7 +1260,8 @@ function doSignOut(){
   document.getElementById('header-team-name').textContent='Fjellhamar FK';
   showAuthOverlay(true);switchAuthTab('login');
 }
-function showAuthMsg(msg,type){var el=document.getElementById('auth-msg');el.textContent=msg;el.className='auth-msg auth-msg-'+type;el.style.display='block';}
+function showAuthMsg(msg,type){var el=document.getElementById('auth-msg');el.textContent=msg;el.className='auth-msg auth-msg-'+type;el.style.display='block';resetLoginBtn();}
+
 function hideAuthMsg(){document.getElementById('auth-msg').style.display='none';}
 
 // ── STATE ──────────────────────────────────────────────────────
