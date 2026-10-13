@@ -848,6 +848,169 @@ var userTeams=[]; // teams user has access to
 var availableTeams=[]; // all teams (for registration)
 var currentUserRole='trener';
 
+// ── RESERVEFORBINDELSE (REST) ──────────────────────────────────────
+// Brukes automatisk hvis standard Firestore-tilkobling henger (kjent problem på enkelte iPhone-er).
+// Har samme grensesnitt som Firestore-biblioteket, men bruker vanlige nettforespørsler (fetch).
+var usingRest=false;
+var fbDbSdk=null;
+function makeRestDb(cfg,getToken){
+  var root='https://firestore.googleapis.com/v1/projects/'+cfg.projectId+'/databases/(default)/documents';
+  function encV(v){
+    if(v===null)return{nullValue:null};
+    if(Array.isArray(v))return{arrayValue:{values:v.map(encV)}};
+    if(v instanceof Date)return{timestampValue:v.toISOString()};
+    var t=typeof v;
+    if(t==='string')return{stringValue:v};
+    if(t==='boolean')return{booleanValue:v};
+    if(t==='number')return(isFinite(v)&&Math.floor(v)===v)?{integerValue:String(v)}:{doubleValue:v};
+    if(t==='object')return{mapValue:{fields:encF(v)}};
+    return{nullValue:null};
+  }
+  function encF(o){var f={};Object.keys(o).forEach(function(k){if(o[k]!==undefined)f[k]=encV(o[k]);});return f;}
+  function decV(v){
+    if('stringValue' in v)return v.stringValue;
+    if('integerValue' in v)return Number(v.integerValue);
+    if('doubleValue' in v)return v.doubleValue;
+    if('booleanValue' in v)return v.booleanValue;
+    if('timestampValue' in v)return v.timestampValue;
+    if('arrayValue' in v)return (v.arrayValue.values||[]).map(decV);
+    if('mapValue' in v)return decF(v.mapValue.fields||{});
+    return null;
+  }
+  function decF(f){var o={};Object.keys(f||{}).forEach(function(k){o[k]=decV(f[k]);});return o;}
+  function req(method,url,body){
+    return getToken().then(function(tok){
+      var h={'Content-Type':'application/json'};
+      if(tok)h['Authorization']='Bearer '+tok;
+      var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var to=setTimeout(function(){if(ctrl)ctrl.abort();},20000);
+      var full=url+(url.indexOf('?')>-1?'&':'?')+'key='+encodeURIComponent(cfg.apiKey);
+      return fetch(full,{method:method,headers:h,body:body?JSON.stringify(body):undefined,signal:ctrl?ctrl.signal:undefined})
+        .then(function(r){
+          clearTimeout(to);
+          return r.text().then(function(t){
+            var j={};try{j=t?JSON.parse(t):{};}catch(e){}
+            if(r.status===404&&method==='GET')return{__notfound:true};
+            if(!r.ok){
+              var er=(j&&j.error)||(Array.isArray(j)&&j[0]&&j[0].error)||{};
+              var e=new Error(er.message||('HTTP '+r.status));
+              e.code=String(er.status||'').toLowerCase().replace(/_/g,'-');e.status=r.status;throw e;
+            }
+            return j;
+          });
+        },function(e){clearTimeout(to);throw e;});
+    });
+  }
+  function pathFromName(name){return name.split('/documents/')[1];}
+  function docSnap(name,fields,ref){
+    return{id:name.split('/').pop(),exists:true,ref:ref||mkDoc(pathFromName(name)),data:function(){return decF(fields);}};
+  }
+  function mkSnap(docs){
+    return{docs:docs,empty:docs.length===0,size:docs.length,forEach:function(fn){docs.forEach(fn);}};
+  }
+  function maskQs(data){return Object.keys(data).map(function(k){return 'updateMask.fieldPaths='+encodeURIComponent(k);}).join('&');}
+  function poll(fetcher,cb,eb,sig){
+    var stopped=false,last=null,first=true,timer=null,fails=0;
+    function tick(){
+      if(stopped)return;
+      if(document.hidden&&!first){timer=setTimeout(tick,5000);return;}
+      fetcher().then(function(s){
+        if(stopped)return;
+        fails=0;var g=sig(s);
+        if(first||g!==last){first=false;last=g;cb(s);}
+      },function(e){
+        if(stopped)return;
+        fails++;
+        if(first&&fails>=2){first=false;if(eb)eb(e);}
+      }).then(function(){if(!stopped)timer=setTimeout(tick,5000);});
+    }
+    tick();
+    return function(){stopped=true;clearTimeout(timer);};
+  }
+  function mkDoc(path){
+    var segs=path.split('/');
+    var ref={id:segs[segs.length-1],path:path,
+      collection:function(n){return mkCol(path+'/'+n);},
+      get:function(){
+        return req('GET',root+'/'+path).then(function(j){
+          if(j.__notfound)return{id:ref.id,exists:false,ref:ref,data:function(){return undefined;}};
+          return docSnap(j.name,j.fields||{},ref);
+        });
+      },
+      set:function(data,opts){
+        var url=root+'/'+path;
+        if(opts&&opts.merge)url+='?'+maskQs(data);
+        return req('PATCH',url,{fields:encF(data)});
+      },
+      update:function(data){
+        return req('PATCH',root+'/'+path+'?currentDocument.exists=true&'+maskQs(data),{fields:encF(data)});
+      },
+      delete:function(){return req('DELETE',root+'/'+path);},
+      onSnapshot:function(cb,eb){
+        return poll(function(){return ref.get();},cb,eb,function(s){return s.exists?JSON.stringify(s.data()):'-';});
+      }
+    };
+    return ref;
+  }
+  function mkCol(path,q){
+    q=q||{w:[],o:[],l:null};
+    var segs=path.split('/');var cid=segs[segs.length-1];
+    var parent=segs.length>1?segs.slice(0,-1).join('/'):'';
+    var base=root+(parent?'/'+parent:'');
+    var col={path:path,id:cid,
+      doc:function(id){return mkDoc(path+'/'+id);},
+      where:function(f,op,v){
+        if(op!=='==')throw new Error('Reserveforbindelsen støtter kun ==');
+        return mkCol(path,{w:q.w.concat([[f,v]]),o:q.o,l:q.l});
+      },
+      orderBy:function(f,d){return mkCol(path,{w:q.w,o:q.o.concat([[f,d==='desc'?'DESCENDING':'ASCENDING']]),l:q.l});},
+      limit:function(n){return mkCol(path,{w:q.w,o:q.o,l:n});},
+      get:function(){
+        var sq={from:[{collectionId:cid}]};
+        var fl=q.w.map(function(x){return{fieldFilter:{field:{fieldPath:x[0]},op:'EQUAL',value:encV(x[1])}};});
+        if(fl.length===1)sq.where=fl[0];
+        else if(fl.length>1)sq.where={compositeFilter:{op:'AND',filters:fl}};
+        if(q.o.length)sq.orderBy=q.o.map(function(x){return{field:{fieldPath:x[0]},direction:x[1]};});
+        if(q.l)sq.limit=q.l;
+        return req('POST',base+':runQuery',{structuredQuery:sq}).then(function(arr){
+          var docs=[];
+          (arr||[]).forEach(function(r){if(r.document)docs.push(docSnap(r.document.name,r.document.fields||{}));});
+          return mkSnap(docs);
+        });
+      },
+      add:function(data){
+        return req('POST',base+'/'+cid,{fields:encF(data)}).then(function(j){return mkDoc(pathFromName(j.name));});
+      },
+      onSnapshot:function(cb,eb){
+        return poll(function(){return col.get();},cb,eb,function(s){
+          return JSON.stringify(s.docs.map(function(d){return[d.id,d.data()];}));
+        });
+      }
+    };
+    return col;
+  }
+  return{
+    collection:function(n){return mkCol(n);},
+    settings:function(){},
+    batch:function(){
+      var ops=[];
+      return{delete:function(ref){ops.push(ref);},commit:function(){return Promise.all(ops.map(function(r){return r.delete();}));}};
+    },
+    _enc:encF,_dec:decF
+  };
+}
+function restToken(){var u=fbAuth&&fbAuth.currentUser;return u?u.getIdToken():Promise.resolve(null);}
+function switchToRest(why){
+  if(usingRest)return;
+  usingRest=true;
+  try{localStorage.setItem('fk_rest_mode',String(Date.now()));}catch(e){}
+  console.warn('Bytter til reserveforbindelse (REST):',why);
+  fbDb=makeRestDb(firebaseConfig,restToken);
+}
+function shouldStartInRest(){
+  try{var t=parseInt(localStorage.getItem('fk_rest_mode')||'0',10);return t&&(Date.now()-t)<3*24*3600*1000;}catch(e){return false;}
+}
+
 function initFirebase(){
   if(window.location.protocol==='file:'){
     document.getElementById('local-test-bar').style.display='block';
@@ -856,6 +1019,9 @@ function initFirebase(){
     firebase.initializeApp(firebaseConfig);
     fbAuth=firebase.auth();fbDb=firebase.firestore();
     try{fbDb.settings({experimentalForceLongPolling:true,merge:true});}catch(e){console.warn('Long-polling-innstilling ikke tilgjengelig:',e.message);}
+    fbDbSdk=fbDb;
+    if(/[?&]rest=0/.test(location.search)){try{localStorage.removeItem('fk_rest_mode');}catch(e){}}
+    if(/[?&]rest=1/.test(location.search)||shouldStartInRest())switchToRest('valgt via adresse eller lagret fra tidligere innlogging');
     // Load available teams for registration dropdown
     loadAvailableTeams();
     fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
@@ -946,7 +1112,7 @@ function checkUserApproved(user){
   // Sjekk superadmins-collection i Firestore (inkl. hardkodet superadmin)
   var isMasterAdmin=user.email===SUPERADMIN_EMAIL;
 
-  fbDb.collection('superadmins').doc(user.email).get().then(function(saDoc){
+  getWithRetry(fbDb.collection('superadmins').doc(user.email),1,usingRest?15000:7000).then(function(saDoc){
     if(isMasterAdmin||saDoc.exists){
       // Superadmin — finn navn fra team_members eller bruk e-post
       fbDb.collection('team_members').where('email','==',user.email).get().then(function(snap){
@@ -975,7 +1141,7 @@ function checkUserApproved(user){
 
     // Sjekk team_members
     loginStage='henter lagtilgang';
-    getWithRetry(fbDb.collection('team_members').where('email','==',user.email),3,7000).then(function(snap){
+    getWithRetry(fbDb.collection('team_members').where('email','==',user.email),1,usingRest?15000:7000).then(function(snap){
       if(!snap.empty){
         userTeams=[];
         snap.forEach(function(doc){userTeams.push(Object.assign({docId:doc.id},doc.data()));});
@@ -1019,12 +1185,14 @@ function checkUserApproved(user){
       });
     }).catch(function(e){
       console.warn('checkUserApproved:',e);
+      if(e&&e.message==='timeout'&&!usingRest){switchToRest('team_members tidsavbrudd');loginStage='pr\u00f8ver reserveforbindelse';checkUserApproved(user);return;}
       fbAuth.signOut().then(function(){
         showAuthOverlay(true);
         showAuthMsg('Kunne ikke verifisere tilgang. Sjekk internettforbindelsen og pr\u00f8v igjen.','error');
       });
     });
-  }).catch(function(){
+  }).catch(function(e){
+    if(e&&e.message==='timeout'&&!usingRest){switchToRest('superadmins tidsavbrudd');loginStage='pr\u00f8ver reserveforbindelse';checkUserApproved(user);return;}
     // Fallback hvis superadmins-collection ikke kan leses
     if(isMasterAdmin){
       currentUserRole='superadmin';currentTeamId='g2016';currentTeamName='Gutter 2016';
@@ -1121,7 +1289,7 @@ function doLogin(){
   var btn=document.querySelector('#auth-login .auth-btn');btn.disabled=true;btn.textContent='Logger inn\u2026';
   hideAuthMsg();
   loginStage='verifiserer passord';
-  // Vaktbikkje: hvis innloggingen ikke er ferdig etter 20 sekunder, gi beskjed i stedet for å henge
+  // Vaktbikkje: hvis innloggingen ikke er ferdig etter 45 sekunder, gi beskjed i stedet for å henge
   if(loginWatchdog)clearTimeout(loginWatchdog);
   loginWatchdog=setTimeout(function(){
     loginWatchdog=null;
@@ -1129,7 +1297,7 @@ function doLogin(){
     if(fbAuth)fbAuth.signOut();
     showAuthOverlay(true);
     showAuthMsg('Innloggingen tok for lang tid (stoppet ved: '+stage+').\n\nSjekk nettverket, pr\u00f8v mobildata i stedet for Wi-Fi (eller omvendt), og skru av VPN/innholdsblokkering. Pr\u00f8v s\u00e5 igjen.','error');
-  },20000);
+  },45000);
   fbAuth.signInWithEmailAndPassword(email,password).catch(function(err){
     var wrong=['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-login-credentials','auth/invalid-email'];
     var msg;
@@ -1315,12 +1483,14 @@ function saveHistory(){
   try{localStorage.setItem('fk_history_'+currentTeamId,JSON.stringify(appHistory));}catch(e){}
 }
 
+var dataUnsubs=[];
 function loadFromFirestore(callback){
   if(!fbDb){ callback(); return; }
+  dataUnsubs.forEach(function(u){try{u();}catch(e){}});dataUnsubs=[];
   var playersReady=false, historyReady=false;
 
   // Sanntidslytter for spillere
-  teamDataRef('players').onSnapshot(function(doc){
+  dataUnsubs.push(teamDataRef('players').onSnapshot(function(doc){
     if(doc.exists&&doc.data().data){
       try{allPlayers=JSON.parse(doc.data().data);}catch(e){allPlayers=[];}
     } else {
@@ -1345,10 +1515,10 @@ function loadFromFirestore(callback){
     try{allPlayers=JSON.parse(localStorage.getItem('fk_players_'+currentTeamId)||'[]');}catch(err){allPlayers=[];}
     playersReady=true;
     if(historyReady) callback();
-  });
+  }));
 
   // Sanntidslytter for historikk
-  teamDataRef('history').onSnapshot(function(doc){
+  dataUnsubs.push(teamDataRef('history').onSnapshot(function(doc){
     if(doc.exists&&doc.data().data){
       try{appHistory=JSON.parse(doc.data().data);}catch(e){appHistory=[];}
     } else {
@@ -1366,7 +1536,15 @@ function loadFromFirestore(callback){
     try{appHistory=JSON.parse(localStorage.getItem('fk_history_'+currentTeamId)||'[]');}catch(err){appHistory=[];}
     historyReady=true;
     if(playersReady) callback();
-  });
+  }));
+
+  // Hvis databasen ikke svarer innen 10 sek: bytt til reserveforbindelsen og last på nytt
+  setTimeout(function(){
+    if(!(playersReady&&historyReady)&&!usingRest){
+      switchToRest('data-lyttere tidsavbrudd');
+      loadFromFirestore(callback);
+    }
+  },10000);
 }
 
 function clearPlayers(){
