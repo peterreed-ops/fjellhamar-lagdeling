@@ -285,7 +285,7 @@
       </div>
 
       <div class="auth-msg" id="auth-msg"></div>
-      <div style="text-align:center;margin-top:12px;"><button type="button" onclick="runConnTest()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--slate);cursor:pointer;">Kjør tilkoblingstest</button></div>
+      <div style="text-align:center;margin-top:12px;"><button type="button" onclick="runConnTest()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--slate);cursor:pointer;">Kjør tilkoblingstest</button> <button type="button" onclick="runLoginTest()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--slate);cursor:pointer;">Test med innlogging</button></div>
       <pre id="conn-test-out" style="display:none;white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;margin-top:10px;text-align:left;color:var(--slate);"></pre>
       <div style="font-size:10px;color:var(--slate-light);text-align:center;margin-top:10px;">Versjon <span id="app-ver"></span></div>
 
@@ -1014,7 +1014,7 @@ function shouldStartInRest(){
   try{var t=parseInt(localStorage.getItem('fk_rest_mode')||'0',10);return t&&(Date.now()-t)<3*24*3600*1000;}catch(e){return false;}
 }
 
-var APP_VERSION='2026-10-15a';
+var APP_VERSION='2026-10-15b';var loginTestRunning=false;
 function runConnTest(){
   var out=document.getElementById('conn-test-out');out.style.display='block';
   var lines=['Versjon '+APP_VERSION+' | metode: '+(usingRest?'reserve':'standard'),'Enhet: '+navigator.userAgent,''];
@@ -1033,14 +1033,55 @@ function runConnTest(){
       });
     });
   }
-  step('Innloggingstjeneste',function(){return fetch('https://identitytoolkit.googleapis.com/',{mode:'no-cors'});},8000)
-  .then(function(){return step('Databaseadresse',function(){return fetch('https://firestore.googleapis.com/',{mode:'no-cors'});},8000);})
+  step('Innloggingstjeneste',function(){return fetch('https://identitytoolkit.googleapis.com/',{mode:'no-cors'}).then(function(){});},8000)
+  .then(function(){return step('Databaseadresse',function(){return fetch('https://firestore.googleapis.com/',{mode:'no-cors'}).then(function(){});},8000);})
   .then(function(){return step('Database, reservemetode',function(){
     var r=makeRestDb(firebaseConfig,function(){return Promise.resolve(null);});
     return r.collection('teams').get().then(function(x){return x.size+' lag';});},12000);})
   .then(function(){return step('Database, standardmetode',function(){
     return fbDbSdk.collection('teams').get({source:'server'}).then(function(x){return x.size+' lag';});},12000);})
   .then(function(){lines.push('');lines.push('Ferdig. Ta skjermbilde av dette.');show();});
+}
+function runLoginTest(){
+  var em=document.getElementById('login-email').value.trim();
+  var pw=document.getElementById('login-password').value;
+  var out=document.getElementById('conn-test-out');out.style.display='block';
+  if(!em||!pw){out.textContent='Fyll inn e-post og passord f\u00f8rst, og trykk s\u00e5 \u00abTest med innlogging\u00bb.';return;}
+  var lines=['Versjon '+APP_VERSION+' | metode: '+(usingRest?'reserve':'standard'),''];
+  function show(){out.textContent=lines.join('\n');}
+  function step(name,fn,ms){
+    var t0=Date.now();lines.push('\u2026 '+name);show();var idx=lines.length-1;
+    return new Promise(function(res){
+      var done=false;
+      var to=setTimeout(function(){if(done)return;done=true;lines[idx]='\u2717 '+name+': ingen svar etter '+(ms/1000)+' s';show();res();},ms);
+      Promise.resolve().then(fn).then(function(r){
+        if(done)return;done=true;clearTimeout(to);
+        lines[idx]='\u2713 '+name+': OK ('+(Date.now()-t0)+' ms)'+(r?' '+r:'');show();res();
+      },function(e){
+        if(done)return;done=true;clearTimeout(to);
+        lines[idx]='\u2717 '+name+': '+((e&&(e.code||e.message))||e)+' ('+(Date.now()-t0)+' ms)';show();res();
+      });
+    });
+  }
+  loginTestRunning=true;
+  var user=null,token=null;
+  step('Logger inn',function(){return fbAuth.signInWithEmailAndPassword(em,pw).then(function(c){user=c.user;});},15000)
+  .then(function(){
+    if(!user)return;
+    return step('Henter innloggingsbevis',function(){return user.getIdToken().then(function(t){token=t;return '('+t.length+' tegn)';});},10000)
+    .then(function(){return step('Reservemetode: lagtilgang',function(){
+      var r=makeRestDb(firebaseConfig,function(){return Promise.resolve(token);});
+      return r.collection('team_members').where('email','==',user.email).get().then(function(x){return x.size+' rader';});},15000);})
+    .then(function(){return step('Standard: superadmin-sjekk',function(){
+      return fbDbSdk.collection('superadmins').doc(user.email).get({source:'server'}).then(function(d){return d.exists?'finnes':'finnes ikke';});},10000);})
+    .then(function(){return step('Standard: lagtilgang',function(){
+      return fbDbSdk.collection('team_members').where('email','==',user.email).get({source:'server'}).then(function(x){return x.size+' rader';});},10000);});
+  })
+  .then(function(){
+    lines.push('');lines.push('Ferdig. Ta skjermbilde av dette.');show();
+    return fbAuth.signOut().catch(function(){});
+  })
+  .then(function(){loginTestRunning=false;});
 }
 function initFirebase(){
   if(window.location.protocol==='file:'){
@@ -1056,7 +1097,7 @@ function initFirebase(){
     if(/[?&]rest=1/.test(location.search)||shouldStartInRest())switchToRest('valgt via adresse eller lagret fra tidligere innlogging');
     // Load available teams for registration dropdown
     loadAvailableTeams();
-    fbAuth.onAuthStateChanged(function(user){if(user)checkUserApproved(user);else showAuthOverlay(true);});
+    fbAuth.onAuthStateChanged(function(user){if(loginTestRunning)return;if(user)checkUserApproved(user);else showAuthOverlay(true);});
   }catch(e){console.warn('Firebase ikke konfigurert:',e.message);showAuthOverlay(false);}
 }
 
