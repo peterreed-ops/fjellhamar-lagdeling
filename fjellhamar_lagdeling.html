@@ -285,6 +285,9 @@
       </div>
 
       <div class="auth-msg" id="auth-msg"></div>
+      <div style="text-align:center;margin-top:12px;"><button type="button" onclick="runConnTest()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--slate);cursor:pointer;">Kjør tilkoblingstest</button></div>
+      <pre id="conn-test-out" style="display:none;white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;margin-top:10px;text-align:left;color:var(--slate);"></pre>
+      <div style="font-size:10px;color:var(--slate-light);text-align:center;margin-top:10px;">Versjon <span id="app-ver"></span></div>
 
       <!-- LOKAL TESTING — vises kun når filen åpnes direkte fra disk -->
       <div id="local-test-bar" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); text-align:center;">
@@ -1011,6 +1014,34 @@ function shouldStartInRest(){
   try{var t=parseInt(localStorage.getItem('fk_rest_mode')||'0',10);return t&&(Date.now()-t)<3*24*3600*1000;}catch(e){return false;}
 }
 
+var APP_VERSION='2026-10-15a';
+function runConnTest(){
+  var out=document.getElementById('conn-test-out');out.style.display='block';
+  var lines=['Versjon '+APP_VERSION+' | metode: '+(usingRest?'reserve':'standard'),'Enhet: '+navigator.userAgent,''];
+  function show(){out.textContent=lines.join('\n');}
+  function step(name,fn,ms){
+    var t0=Date.now();lines.push('\u2026 '+name);show();var idx=lines.length-1;
+    return new Promise(function(res){
+      var done=false;
+      var to=setTimeout(function(){if(done)return;done=true;lines[idx]='\u2717 '+name+': ingen svar etter '+(ms/1000)+' s';show();res();},ms);
+      Promise.resolve().then(fn).then(function(r){
+        if(done)return;done=true;clearTimeout(to);
+        lines[idx]='\u2713 '+name+': OK ('+(Date.now()-t0)+' ms)'+(r?' '+r:'');show();res();
+      },function(e){
+        if(done)return;done=true;clearTimeout(to);
+        lines[idx]='\u2717 '+name+': '+((e&&(e.code||e.message))||e)+' ('+(Date.now()-t0)+' ms)';show();res();
+      });
+    });
+  }
+  step('Innloggingstjeneste',function(){return fetch('https://identitytoolkit.googleapis.com/',{mode:'no-cors'});},8000)
+  .then(function(){return step('Databaseadresse',function(){return fetch('https://firestore.googleapis.com/',{mode:'no-cors'});},8000);})
+  .then(function(){return step('Database, reservemetode',function(){
+    var r=makeRestDb(firebaseConfig,function(){return Promise.resolve(null);});
+    return r.collection('teams').get().then(function(x){return x.size+' lag';});},12000);})
+  .then(function(){return step('Database, standardmetode',function(){
+    return fbDbSdk.collection('teams').get({source:'server'}).then(function(x){return x.size+' lag';});},12000);})
+  .then(function(){lines.push('');lines.push('Ferdig. Ta skjermbilde av dette.');show();});
+}
 function initFirebase(){
   if(window.location.protocol==='file:'){
     document.getElementById('local-test-bar').style.display='block';
@@ -1020,6 +1051,7 @@ function initFirebase(){
     fbAuth=firebase.auth();fbDb=firebase.firestore();
     try{fbDb.settings({experimentalForceLongPolling:true,merge:true});}catch(e){console.warn('Long-polling-innstilling ikke tilgjengelig:',e.message);}
     fbDbSdk=fbDb;
+    try{document.getElementById('app-ver').textContent=APP_VERSION;}catch(e){}
     if(/[?&]rest=0/.test(location.search)){try{localStorage.removeItem('fk_rest_mode');}catch(e){}}
     if(/[?&]rest=1/.test(location.search)||shouldStartInRest())switchToRest('valgt via adresse eller lagret fra tidligere innlogging');
     // Load available teams for registration dropdown
@@ -1296,7 +1328,7 @@ function doLogin(){
     var stage=loginStage;
     if(fbAuth)fbAuth.signOut();
     showAuthOverlay(true);
-    showAuthMsg('Innloggingen tok for lang tid (stoppet ved: '+stage+').\n\nSjekk nettverket, pr\u00f8v mobildata i stedet for Wi-Fi (eller omvendt), og skru av VPN/innholdsblokkering. Pr\u00f8v s\u00e5 igjen.','error');
+    showAuthMsg('Innloggingen tok for lang tid (stoppet ved: '+stage+'; metode: '+(usingRest?'reserve':'standard')+'; v'+APP_VERSION+').\n\nTrykk \u00abKj\u00f8r tilkoblingstest\u00bb under og send skjermbilde. Sjekk ellers nettverket, pr\u00f8v mobildata i stedet for Wi-Fi (eller omvendt), og skru av VPN/innholdsblokkering. Pr\u00f8v s\u00e5 igjen.','error');
   },45000);
   fbAuth.signInWithEmailAndPassword(email,password).catch(function(err){
     var wrong=['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-login-credentials','auth/invalid-email'];
