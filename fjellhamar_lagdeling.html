@@ -231,7 +231,7 @@
   .auth-signout{font-size:12px;padding:4px 10px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;}
   #team-switch-btn{font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;white-space:nowrap;}
   #team-switch-btn:hover{background:rgba(200,168,75,.15);}
-  #role-switcher option{background:#1a2e40;color:white;}
+  #role-switcher option,#team-switcher option{background:#1a2e40;color:white;}
   .auth-signout:hover{background:rgba(255,255,255,.1);color:white;}
 </style>
 </head>
@@ -309,7 +309,7 @@
     <p id="header-team-name">Fjellhamar FK</p>
   </div>
   <div class="auth-user-bar" id="auth-user-bar" style="display:none;">
-    <span id="team-switch-btn" style="display:none;font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.4);border-radius:99px;color:var(--gold);cursor:pointer;" onclick="showTeamSelectorModal2()">⇄ Bytt lag</span>
+    <select id="team-switcher" style="display:none;max-width:130px;font-size:11px;padding:3px 8px;border:1px solid rgba(200,168,75,.5);border-radius:var(--radius-sm);background:var(--slate-mid);color:var(--gold);cursor:pointer;font-family:'DM Sans',sans-serif;text-overflow:ellipsis;" onchange="switchTeam(this.value)" title="Bytt lag"></select>
     <span class="auth-user-name" id="auth-user-name"></span>
     <!-- Rolle-velger — kun synlig for superadmin og lagadmin -->
     <select id="role-switcher" style="display:none;font-size:11px;padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:var(--radius-sm);background:var(--slate-mid);color:white;cursor:pointer;font-family:'DM Sans',sans-serif;" onchange="switchRole(this.value)" title="Bytt visningsrolle">
@@ -1014,7 +1014,7 @@ function shouldStartInRest(){
   try{var t=parseInt(localStorage.getItem('fk_rest_mode')||'0',10);return t&&(Date.now()-t)<3*24*3600*1000;}catch(e){return false;}
 }
 
-var APP_VERSION='2026-10-15c';var loginTestRunning=false;
+var APP_VERSION='2026-10-15d';var loginTestRunning=false;
 function runConnTest(){
   var out=document.getElementById('conn-test-out');out.style.display='block';
   var lines=['Versjon '+APP_VERSION+' | metode: '+(usingRest?'reserve':'standard'),'Enhet: '+navigator.userAgent,''];
@@ -1294,6 +1294,49 @@ function switchRole(newRole){
   if(ap&&ap.id==='page-admin')loadAdminPage();
 }
 
+var switcherTeams=[];
+function escHtml(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function buildTeamSwitcher(){
+  var sel=document.getElementById('team-switcher');
+  if(!sel)return;
+  function fill(list){
+    switcherTeams=list;
+    if(list.length<2){sel.style.display='none';return;}
+    sel.innerHTML=list.map(function(t){return '<option value="'+escHtml(t.teamId)+'">'+escHtml(t.teamName)+'</option>';}).join('');
+    sel.value=currentTeamId;
+    sel.style.display='block';
+  }
+  if(actualUserRole==='superadmin'){
+    // Superadmin kan bytte mellom alle lag
+    fbDb.collection('teams').orderBy('name').get().then(function(snap){
+      var l=[];
+      snap.forEach(function(d){l.push({teamId:d.id,teamName:d.data().name||d.id,role:'superadmin'});});
+      fill(l);
+    }).catch(function(e){console.warn('Lagvelger:',e);});
+  } else {
+    fill(userTeams.map(function(t){return{teamId:t.teamId,teamName:t.teamName,role:t.role||'trener',name:t.name};}));
+  }
+}
+function switchTeam(teamId){
+  var t=null;
+  switcherTeams.forEach(function(x){if(x.teamId===teamId)t=x;});
+  if(!t||t.teamId===currentTeamId)return;
+  var role=t.role||'trener';
+  stopPendingRequestsListener();
+  allPlayers=[];appHistory=[];attendingPlayers=[];attendingNames=[];
+  document.getElementById('levels-done').style.display='none';
+  document.getElementById('levels-saved-row').style.display='none';
+  var rc=document.getElementById('result-content'),re=document.getElementById('result-empty');
+  if(rc)rc.style.display='none';
+  if(re)re.style.display='';
+  currentTeamId=t.teamId;currentTeamName=t.teamName;currentUserRole=role;
+  document.getElementById('tab-admin').style.display=(role==='superadmin'||role==='lagadmin')?'block':'none';
+  var al=document.getElementById('admin-team-label');if(al)al.textContent=t.teamName;
+  showPage('setup');
+  updateSetupSummary();
+  onUserAccessGranted(t.name||document.getElementById('auth-user-name').textContent||currentUserEmail,role);
+}
+
 function onUserAccessGranted(name,role){
   saveLastTeam(currentTeamId,currentTeamName);
   actualUserRole=role; // lagre faktisk rolle
@@ -1325,9 +1368,7 @@ function onUserAccessGranted(name,role){
     document.getElementById('tab-admin').style.display='block';
     startPendingRequestsListener();
   }
-  if(userTeams.length>1){
-    document.getElementById('team-switch-btn').style.display='inline-block';
-  }
+  buildTeamSwitcher();
   updatePlayersPageForRole(role);
   showAuthOverlay(false);
   loadFromFirestore(function(){
@@ -1513,7 +1554,7 @@ function doSignOut(){
   allPlayers=[];appHistory=[];attendingNames=[];attendingPlayers=[];
   document.getElementById('auth-user-bar').style.display='none';
   document.getElementById('tab-admin').style.display='none';
-  document.getElementById('team-switch-btn').style.display='none';
+  document.getElementById('team-switcher').style.display='none';
   document.getElementById('header-team-name').textContent='Fjellhamar FK';
   showAuthOverlay(true);switchAuthTab('login');
 }
@@ -1984,6 +2025,7 @@ function showTeamSelectorModal2(){
 
 function switchActiveTeam(btn){
   var id=btn.getAttribute('data-id');var name=btn.getAttribute('data-name');
+  if(switcherTeams.some(function(x){return x.teamId===id;})){switchTeam(id);return;}
   currentTeamId=id;currentTeamName=name;
   saveLastTeam(id,name);
   // Nullstill alt lag-spesifikt — inkludert oppmøte
